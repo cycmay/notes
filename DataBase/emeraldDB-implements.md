@@ -1,8 +1,13 @@
-# emeraldDB implements
+emeraldDB implements
 
 ## enveriments
 
-mkdir emeralddb
+在项目 emeralddb 目录下运行 build.sh ，emralddb 可执行文件编译连接成功，执行后输出hello world。
+
+环境基本搭建完成 保存快照
+
+```bash
+			 mkdir emeralddb
   176  ls
   177  cd emeralddb/
   179  mkdir boost
@@ -95,15 +100,7 @@ mkdir emeralddb
   330  vim base64.h
   331  mv md5.c md5.cpp
   332  vi nonce.cpp
-  333  cd ../
-  334  ls
-  335  cd ..
-  336  ls
-  337  cd ..
-  338  ks
-  339  ls
-  340  cd ..
-  341  ls
+
   342  chmod 755 build
   343  chmod 755 build.sh
   344  vim build
@@ -118,739 +115,878 @@ mkdir emeralddb
   353  ls
   354  vim pmdMain.cpp
   355  vim ~/.vimrc
-
-
-
-在项目 emeralddb 目录下运行 build.sh ，emralddb 可执行文件编译连接成功，执行后输出hello world。
-
-环境基本搭建完成 保存快照
-
-
-
-## linux 下 socket 通信机制
-
-在Linux中一切都是文件，socket 也被认为是文件的一种，两台计算机之间的通信，实际上就是两个socket文件的相互读写。
-
-### 创建socket
-
-使用头文件<sys/socket.h> 的socket()函数来创建套接字：
-
-函数原型：`int socket(int af, int type, int protocol);`
-
-1. af 地址符 Address Family，即IP地址类型，常用：AF_INET, AF_INET6. （INET 是Internet的缩写）AF_INET: IPv4地址，AF_INET6: IPv6地址。
-2. type 数据传输方式，常用：SOCK_STREAM, SOCK_DGRAM
-3. protocol 传输协议， 常用：IPPROTO_TCP, IPPROTO_UDP. 分别代表TCP传输协议和UDP传输协议。使用0表示系统自动推演协议。
-4. 返回值为int 表示**文件描述符**， File Descriptor，Linux系统中创建的文件都有一个int型的编号。
-
-示例：
-`int tcp_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);  // TCP套接字`
-`int udp_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP); // UDP套接字`
-
-### 绑定端口与建立连接
-
-bind() 函数将套接字与特定额IP地址和端口绑定起来，这样流经该IP地址对应端口的数据才会交给套接字处理
-
-connect() 函数建立客户端的连接
-
-bind函数原型：
-
-`int bind(int sock, struct sockaddr *addr, socklen_t addrlen);	//Linux bind()`
-
-1. sock socket文件描述符
-2. addr sockaddr结构体变量的指针
-3. addrlen addr变量大小 可有sizeof() 计算得出
-
-代码示例：
-
-```c
-// 创建套接字
-int serv_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-// 创建sockaddr_in结构体变量
-struct sockaddr_in serv_addr;
-memset(&serv_addr, 0, sizeof(serv_addr));	// 每个字节0
-serv_addr.sin_family = AF_INET	// 使用ipv4类型地址
-serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");	// 服务器ip地址
-serv_addr.sin_port = htons(1234);	// 端口
-
-// 将套接字和IP、端口绑定
-// 这里将struct sockaddr_in 类型强制转换成sockaddr类型
-bind(serv_sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
 ```
 
 
 
-struct sockadd_in :
+## Socket通信
+
+创建一个类ossSocket, 该类实现socket通信的几个步骤，包括初始化socket，绑定监听bind/listen，发送接收send/recv等。
+
+### ossSocket类
+
+#### 私有成员变量
+
+1.  int _fd, socket的描述符。一个ossSocket类维持一个sock，它有一个Unix文件描述符提供给用户进行程序操作。
+2.  socketlen_t  _addressLen，主机地址长度。
+3.  socketlen_t  _peerAddressLen, 客户机地址长度。
+4.  struct sockaddr_in _sockAddress，主机地址结构体。struct sockaddr_in 是Unix封装好的IPv4类型地址结构。
+5.  struct sockaddr_in _peerAddress, 客户机地址结构体。
+6.  bool _init，sock对象是否已经被初始化。对应sock对象初始化函数initSocket()。
+7.  int _timeout，超时设置。
+
+#### 构造函数
+
+**ossSocket()，构造一个全新的套接字**
 
 ```c
-struct sockaddr_in
+ossSocket::ossSocket()
 {
-	sa_family_t		sin_family;	// 地址族 即地址类型 AF address family
-	uint16_t			sin_port;		// 16位的端口号
-  struct in_addr sin_addr;	// 32位IP地址
-  char 					sin_zero[8];	//不使用
+    _init = false;
+    _fd = 0;
+    _timeout = 0;
+    memset(&_sockAddress, 0, sizeof(sockaddr_in));
+    memset(&_peerAddress, 0, sizeof(sockaddr_in));
+    _peerAddressLen = sizeof(_peerAddress);
+    _addressLen = sizeof(_sockAddress);
 }
 ```
 
-1. sin_port 端口号，uint16_t 长度为两字节，理论上端口号取值范围0~65536，0~1023一般有操作系统占用分配给特定的服务程序。端口号要用htons()转换
+将初始化状态\_init设置为false，文件描述符\_fd设置为0，超时\_timeout设置为0，地址结构体\_sockAddress和\_peerAddress内存置0，地址长度\_peerAddressLen和\_addressLen内存置0.
 
-struct in_addr:
+**ossSocket(unsigned int port, int timeout)，构造服务端用于监听的socket**
 
 ```c
-strcut in_addr
+ossSocket::ossSocket(unsigned int port, int timeout)
 {
-	// in_addr_t 在头文件<netinet/in.h>	中定义，等价于unsigned long，长度为4个字节
-	in_addr_t 	s_addr;	// 32位IP地址
+    _init = false;
+    _fd = 0;
+    _timeout = timeout;
+    memset(&_sockAddress, 0, sizeof(sockaddr_in));
+    memset(&_peerAddress, 0, sizeof(sockaddr_in));
+    _peerAddressLen = sizeof(_peerAddress);
+    _sockAddress.sin_family = AF_INET;
+    _sockAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+    _sockAddress.sin_port = htons(port);
+    _addressLen = sizeof(_sockAddress);
 }
 ```
 
-s_addr 为长整型，故传入的参数字符串型要使用inet_addr()函数转换。
+服务端的socket要初始化本地的socket。
 
-struct sockaddr:
+部分参数参考上述。这里的服务端socket设置：
+
+\_sockAddress.sin_family 通信协议族为 AF\_INET(IPV4).
+
+ \_sockAddress.sin\_addr.s\_addr 绑定socket宿主机IP地址。htonl 将主机字节类型转换为网络字节类型 l表示hostlong 主机为长整型,htons s表示短整型。 INADDR_ANY 为表示创建的socket接收任何地址的信息。If the (sin_addr.s_addr) field is set to the constant INADDR_ANY, as defined in netinet/in.h, the caller is requesting that the socket be bound to all network interfaces on the host.
+
+_sockAddress.sin_port = htons(port) 转换int型的port为短整型。
+
+**ossSocket(const char \*pHostName, unsigned int port, int timeout) 构造客户端的套接字**
 
 ```c
-struct sockaddr
+ossSocket::ossSocket(const char *pHostName, unsigned int port, int timeout)
 {
-	sa_family_t sin_family;
-	char 				sa_data[14];	//IP地址和端口号
+    struct hostent *hp;
+    _init = false;
+    _timeout = timeout;
+    _fd = 0;
+    memset(&_sockAddress, 0, sizeof(sockaddr_in));
+    memset(&_peerAddress, 0, sizeof(sockaddr_in));
+    _peerAddressLen = sizeof(_peerAddress);
+    _sockAddress.sin_family = AF_INET;
+    // 解析对方的机型
+    if( (hp=gethostbyname(pHostName)) )
+    {
+        _sockAddress.sin_addr.s_addr = *((int *)hp->h_addr_list[0]);
+    }else
+    {
+        _sockAddress.sin_addr.s_addr = inet_addr(pHostName);
+    }
+    _sockAddress.sin_port = htons(port);
+    _addressLen = sizeof(_sockAddress);
 }
 ```
 
-可以发现，sockaddr的长度等于sockaddr_in的长度，sockaddr内部成员sa_data保存的是ip地址和端口号，并没有函数对sockaddr结构体的ip和port分开输入，于是转换成对sockaddr_in的定义，并强制将其转换为sockaddr. 同时，sockaddr_in6 表示IPv6地址。
+客户端的套接字socket要解析服务端的地址信息，一般传入的是服务端ip地址或者hostname(若host文件保存对方hostname)，所以这里使用struct hostent以及函数gethostbyname()来解析对方的地址；若解析失败，使用inet_addr()解析传进来的点分十进制ip地址。
 
-struct sockaddr_in6:
-
-```c
-struct sockaddr_in6 
-{ 
-    sa_family_t sin6_family;  //(2)地址类型，取值为AF_INET6
-    in_port_t sin6_port;  //(2)16位端口号
-    uint32_t sin6_flowinfo;  //(4)IPv6流信息
-    struct in6_addr sin6_addr;  //(4)具体的IPv6地址
-    uint32_t sin6_scope_id;  //(4)接口范围ID
-};
-```
-
-connect() 函数
-
-connect()函数用来创建连接，函数原型：
-
-`int connetc(int sock, struck sockaddr *serv_addr, socklen_t addrlen);`
-
-参数说明与bind()函数相同。
-
-### 监听状态
-
-服务端程序使用bind()绑定套接字与ip、端口后，需要使用listen()函数使套接字进入被动监听状态，随后accept()函数就可以响应客户端请求。
-
-监听函数
-
-listen()函数可以使套接字进入被动监听状态，函数原型：
-`int listen(int sock, int backlog);	//linux`
-
-backlog 为请求队列最大长度，被动监听是套接字在没有请求时进入睡眠状态，接收到请求时被唤醒。
-
-当套接字正在处理某一请求时，新的请求会被放入缓冲区并排队，等待上一个请求处理完毕后，新的请求队列队首才会被处理。将backlog自定义设置为10-20都可以，或者设置为SOMAXCONN，意思为有操作系统自行决定队列长度。当队列满时，新的请求会被报错ECONNREFUSED
-
-接收请求
-
-当服务端处于监听状态后，即可通过accept()函数接收客户端请求，函数原型：
-
-`int accept(int sock, struct sockaddr *addr, socktlen_t addrlen);`
-
-参数说明参照上文listen()函数和connetc()函数
-
-函数返回值为新的套接字，之后的两者之间的通信则使用这个新生成的套接字。
-
-accept()函数会阻塞当前进程，直到新的请求。
-
-### 接收发送数据
-
-套接字文件和普通文件一样，在c语言中，可以直接通过write()写入，read()读取。
-
-服务端在accept()生成的套接字中写入数据，客户端就能读取到，这样就是完成了通信。
-
-wirte() 函数原型:
-
-`ssize_t write(int fd, const void *buf, size_t nbytes);`
-
-1. fd 写入的socket文件描述符
-2. buf 要写入数据的缓冲区地址
-3. nbytes 要写入数据的字节数
-4. size_t 是通过 typedef 声明的 unsigned int 类型；ssize_t 在 "size_t" 前面加了一个"s"，代表 signed，即 ssize_t 是通过 typedef 声明的 signed int 类型。
-5. 返回值 write() 函数会将缓冲区 buf 中的 nbytes 个字节写入文件 fd，成功则返回写入的字节数，失败则返回 -1。
-
-read() 函数原型：
-
-`ssize_t read(int fd, void *buf, size_t nbytes);`
-
-1. buf 为要接收数据的缓冲区地址
-2. nbytes 为要读取的数据的字节数
-3. 其他参数参照write() 函数
-4. 返回值 read() 函数会从 fd 文件中读取 nbytes 个字节并保存到缓冲区 buf，成功则返回读取到的字节数（但遇到文件结尾则返回0），失败则返回 -1。
-
-发送与接收
-
-`int send(int sock, const char *buf, int len, int flags);`
-
-1. flags 为发送数据时的选项 最后的 flags 参数一般设置为 0 或 NULL
-
-`int recv(int sock, char *buf, int len, int flags);`
-
-
-
-### 代码注释
-
-------
-
-
+**ossSocket(int *sock, int timeout)，从一个已经存在的socket创建新的ossSocket对象**
 
 ```c
-_sockAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-_sockAddress.sin_port = htons(port);
+ossSocket::ossSocket(int *sock, int timeout)
+{
+    int rc = EDB_OK;
+    _fd = *sock;
+    // 已经存在的socket表示已经初始化过
+    _init = true;
+    _timeout = timeout;
+    _addressLen = sizeof(_sockAddress);
+    memset(&_peerAddress, 0 , sizeof(sockaddr_in));
+    _peerAddressLen = sizeof(_peerAddress);
+    rc = getsockname(_fd, (sockaddr*)&_sockAddress, &_addressLen);
+    if  (rc)
+    {
+        PD_LOG(PDERROR, "Failed to get sock name, error = %d", 
+                SOCKET_GETLASTERROR);
+        _init = false;
+    }else
+    {
+        rc = getpeername(_fd, (sockaddr *)&_peerAddress, &_peerAddressLen);
+        PD_RC_CHECK(rc, PDERROR, "Failed to get peer name, error = %d",
+                    SOCKET_GETLASTERROR);
+    }
+  done:
+  	return;
+  error:
+  	goto done;
+}
 ```
 
-htonl 将主机字节类型转换为网络字节类型 l表示hostlong 主机为长整型
+一般来说，服务端的socket在监听状态下，会有accept()函数，以阻塞进程的方式等待接收客户端的请求，接收到请求后返回一个新的socket描述符，用于对socket的信息读写操作。所以，这里封装新的socket描述符。
 
-htons s表示短整型
+get socket name.  get peer name，_fd 为已知socket的描述符，将新分配内存空间的 _sockAddress 作为引用参数传入，可以将socket的主机地址保存到该内存空间，同理对peerAddress。
 
-参数INADDR_ANY 表示创建的socket接收任何地址的信息。
+#### 初始化socket
 
-参考：
-
-> ## Name
->
-> htonl, htons, ntohl, ntohs - convert values between host and network byte order
->
-> ## Synopsis
->
-> ```
-> #include <arpa/inet.h>
-> uint32_t htonl(uint32_t hostlong);
-> uint16_t htons(uint16_t hostshort);
-> uint32_t ntohl(uint32_t netlong);
-> uint16_t ntohs(uint16_t netshort);
-> ```
->
-> ## Description
->
-> The **htonl**() function converts the unsigned integer *hostlong* from host byte order to network byte order.
->
-> The **htons**() function converts the unsigned short integer *hostshort* from host byte order to network byte order.
->
-> The **ntohl**() function converts the unsigned integer *netlong* from network byte order to host byte order.
->
-> The **ntohs**() function converts the unsigned short integer *netshort* from network byte order to host byte order.
->
-> On the i386 the host byte order is Least Significant Byte first, whereas the network byte order, as used on the Internet, is Most Significant Byte first.
->
-> ## Conforming to
->
-> POSIX.1-2001.
->
-> Some systems require the inclusion of *<netinet/in.h>* instead of *<arpa/inet.h>*.
-
-> If the (sin_addr.s_addr) field is set to the constant INADDR_ANY, as defined in netinet/in.h, the caller is requesting that the socket be bound to all network interfaces on the host.
-
-------
-
-
+`int initSocket()`，该函数是对socket()函数的封装
 
 ```c
-if( (hp=gethostbyname(pHostName)) )
-		_sockAddress.sin_addr.s_addr = *((int *)hp->h_addr_list[0]);
-else
-		_sockAddress.sin_addr.s_addr = inet_addr(pHostName);
+int ossSocket::initSocket()
+{
+    int rc = EDB_OK;
+    if(_init)
+    {
+        goto done;
+    }
+    memset(&_peerAddress, 0, sizeof(sockaddr_in));
+    _peerAddressLen = sizeof(_peerAddress);
+    _fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if(-1 == _fd)
+    {
+        PD_RC_CHECK(EDB_NETWORK, PDERROR, "Failed to initialize socket, error = %d",
+                SOCKET_GETLASTERROR);
+    }
+    _init = true;
+    // set timeout
+    setTimeout(_timeout);
+
+done :
+    return rc;
+error :
+    goto done;
+}
 ```
 
-gethostbyname(name) 通过传入字符串类型或者说是指针来查询到hostent结构体。或者转化为二进制格式的网络字节类型。s_addr 设置socket的主机地址。
+首先判断是否已经初始化，若已经初始化直接goto done. 使用系统提供的socket()函数，传入协议族，TCP传输协议，并将生成的socket描述符赋值给对象的成员变量_fd. 最后设置超时时间。
 
-> ```c
-> #include <netdb.h>
-> struct hostent *gethostbyname(const char *name);
-> 
-> The hostent structure is defined in <netdb.h> as follows:
-> 
-> struct hostent {
->   char  *h_name;            /* official name of host */
->   char **h_aliases;         /* alias list */
->   int    h_addrtype;        /* host address type */
->   int    h_length;          /* length of address */
->   char **h_addr_list;       /* list of addresses */
-> }
-> #define h_addr h_addr_list[0] /* for backward compatibility */
-> 
-> ```
->
-> The gethostbyname() function returns a structure of type hostent for the given host name.  Here name is either a hostname or an IPv4 address in standard dot notation (as for inet_addr(3)).  If name is an IPv4 address, no lookup is performed and gethostbyname() simply copies name into the h_name field and its struct in_addr equivalent  into the h_addr_list[0] field of the returned hostent structure.  If  name doesn't end in a dot and the environment variable HOSTALIASES is  set, the alias file pointed to by HOSTALIASES will first be searched for name (see hostname(7) for the file format).  The current domain and its parents are searched unless name ends in a dot.
-
-> ```c
-> #include <sys/socket.h>
-> #include <netinet/in.h>
-> #include <arpa/inet.h>
-> 
-> in_addr_t inet_addr(const char *cp);
-> ```
->
-> The inet_addr() function converts the Internet host address cp from IPv4 numbers-and-dots notation into binary data in network byte order.  If the input is invalid, INADDR_NONE (usually -1) is returned.  Use of this function is problematic because -1 is a valid address (255.255.255.255).  Avoid its use in favor of inet_aton(),
-> inet_pton(3), or getaddrinfo(3), which provide a cleaner way to indicate error return.
-
-------
-
-
+#### 设置服务端地址
 
 ```c
-rc = getsockname(_fd, (sockaddr*)&_sockAddress, &_addressLen);
-rc = getpeername(_fd, (sockaddr *)&_peerAddress, &_peerAddressLen);
+void ossSocket::setAddress(const char *pHostName, unsigned int port)
+{
+    struct hostent *hp;
+    memset(&_sockAddress, 0, sizeof(sockaddr_in));
+    memset(&_peerAddress, 0, sizeof(sockaddr_in));
+    _peerAddressLen = sizeof(_peerAddress);
+    _sockAddress.sin_family = AF_INET;  // IPV4
+    //获取hostent结构体
+    if( (hp=gethostbyname(pHostName)) )
+        _sockAddress.sin_addr.s_addr = *((int *)hp->h_addr_list[0]);
+    else
+        _sockAddress.sin_addr.s_addr = inet_addr(pHostName);
+
+    _sockAddress.sin_port = htons(port);
+    _addressLen = sizeof(_sockAddress);
+}
 ```
 
-get socket name.  get peer name
+一般该函数使给客户端socket调用，用来绑定请求服务的服务器地址。
 
-_fd 为已知socket的描述符，将新分配内存空间的 _sockAddress 作为引用参数传入，可以将socket的主机地址保存到该内存空间，同理对peerAddress。
+函数结构与构造客户端ossSocket对象类似。
 
-参考：
-
-```
-#include <sys/socket.h>
-
-int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-```
-
-```
-getsockname() returns the current address to which the socket sockfd is bound, in the buffer pointed to by addr.  The addrlen argument should be initialized to indicate the amount of space (in bytes) pointed to by addr.  On return it contains the actual size of the socket address. The returned address is truncated if the buffer provided is too small; in this case, addrlen will return a value greater than was supplied to the call.
-On success, zero is returned.  On error, -1 is returned, and errno is set appropriately.
-```
-
-```
-getpeername() returns the address of the peer connected to the socket sockfd, in the buffer pointed to by addr.  The addrlen argument should be initialized to indicate the amount of space pointed to by addr.  On return it contains the actual size of the name returned (in bytes).  The name is truncated if the buffer provided is too small. The returned address is truncated if the buffer provided is too small; in this case, addrlen will return a value greater than was supplied to the call.
-```
-
-------
-
-setTimeout
-
-```
-struct timeval tv;
-tv.tv_sec = seconds;
-tv.tv_usec = 0;
-// windows take milliseconds as parameter
-// linux takes timeval as input
-rc = setsockopt(_fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(tv));
-```
-
-参考：Name
-
-> getsockopt, setsockopt - get and set options on sockets
->
-> ## Synopsis
->
-> ```
-> #include <sys/types.h>          /* See NOTES */
-> #include <sys/socket.h>
-> int getsockopt(int sockfd, int level, int optname,               void *optval,
-> socklen_t *optlen);int setsockopt(int sockfd, int level, int optname,
->              const void *optval, socklen_t optlen);
-> ```
->
-> ## Description
->
-> getsockopt() and setsockopt() manipulate options for the socket referred to by the file descriptor sockfd. Options may exist at multiple protocol levels; they are always present at the uppermost socket level.
->
-> When manipulating socket options, the level at which the option resides and the name of the option must be specified. To manipulate options at the sockets API level, *level* is specified as **SOL_SOCKET**. To manipulate options at any other level the protocol number of the appropriate protocol controlling the option is supplied. For example, to indicate that an option is to be interpreted by the **TCP** protocol, *level* should be set to the protocol number of **TCP**; see ***getprotoent**(3)*.
->
-> The arguments *optval* and *optlen* are used to access option values for **setsockopt**(). For **getsockopt**() they identify a buffer in which the value for the requested **option**(s) are to be returned. For **getsockopt**(), *optlen* is a value-result argument, initially containing the size of the buffer pointed to by *optval*, and modified on return to indicate the actual size of the value returned. If no option value is to be supplied or returned, *optval* may be NULL.
->
-> *Optname* and any specified options are passed uninterpreted to the appropriate protocol module for interpretation. The include file *<sys/socket.h>* contains definitions for socket level options, described below. Options at other protocol levels vary in format and name; consult the appropriate entries in section 4 of the manual.
->
-> Most socket-level options utilize an *int* argument for *optval*. For **setsockopt**(), the argument should be nonzero to enable a boolean option, or zero if the option is to be disabled.
->
-> For a description of the available socket options see ***socket**(7)* and the appropriate protocol man pages.
->
-> ## Return Value
->
-> On success, zero is returned. On error, -1 is returned, and errno is set appropriately.
-
-------
-
-
+#### 发送队列linger
 
 ```c
-struct linger _linger;
-_linger.l_onoff = lOnOff;
-_linger.l_linger = linger;
-rc = setsockopt(_fd, SOL_SOCKET, SO_LINGER, (const char *)&_linger, sizeof(_linger));
+int ossSocket::setSocketLi(int lOnOff, int linger)
+{
+    int rc = EDB_OK;
+    struct linger _linger;
+    _linger.l_onoff = lOnOff;
+    _linger.l_linger = linger;
+    rc = setsockopt(_fd, SOL_SOCKET, SO_LINGER,
+                    (const char *)&_linger, sizeof(_linger));
+    return rc;
+}
 ```
 
-参考：
+当调用closesocket关闭套接字时，SO_LINGER将决定系统如何处理残存在套接字发送队列中的数据。处理方式无非两种：丢弃或者将数据继续发送至对端，优雅关闭连接。事实上，SO_LINGER并不被推荐使用，大多数情况下我们推荐使用默认的关闭方式。
 
-当调用closesocket关闭套接字时，SO_LINGER将决定系统如何处理残存在套接字发送队列中的数据。处理方式无非两种：丢弃或者将数据继续发送至对端，优雅关闭连接。事实上，SO_LINGER并不被推荐使用，大多数情况下我们推荐使用默认的关闭方式（即下方表格中的第一种情况）。
+#### 绑定监听
 
-下方代码段显示linger结构语法，表格为不同参数情况下的套接字行为。
+bing_listen()，绑定ossSocket对象成员变量\_sockAddress提供的socket地址信息，以及\_addressLen地址长度。
 
-typedef struct linger { 
-![img](http://www.cppblog.com/Images/OutliningIndicators/InBlock.gif)      u_short l_onoff;    //开关，零或者非零 
-![img](http://www.cppblog.com/Images/OutliningIndicators/InBlock.gif)      u_short l_linger;   //优雅关闭最长时限 
-![img](http://www.cppblog.com/Images/OutliningIndicators/ExpandedBlockEnd.gif)    } linger; 
+```c
+int ossSocket::bind_listen()
+{
+    int rc = EDB_OK;
+    int temp = 1;
+    rc = setsockopt(_fd, SOL_SOCKET,
+                    SO_REUSEADDR, (char *)&temp, sizeof(int));
+    if(rc)
+    {
+        PD_LOG(PDWARNING, "Failed to setsocktopt SO_REUSEADDR, error = %d",
+                SOCKET_GETLASTERROR);
+    }
+    rc = setSocketLi(1,30);
+    if (rc)
+    {   
+        PD_LOG(PDWARNING, "Failed to setsockopt SO_LINGER, error = %d", 
+                SOCKET_GETLASTERROR);
+    }
+    rc = ::bind(_fd, (struct sockaddr*)&_sockAddress, _addressLen);
+    if(rc)
+    {
+        PD_RC_CHECK(EDB_NETWORK, PDERROR, "Failed to bind socket, error = %d", 
+                SOCKET_GETLASTERROR);
+    }
+    rc = listen(_fd, SOMAXCONN);
+    if(rc)
+    {   
+        PD_RC_CHECK(EDB_NETWORK, PDERROR, "Failed to listen socket, error = %d",
+                SOCKET_GETLASTERROR);
+    }
 
-
-
-| l_onoff | l_linger | closesocket行为                                              | 发送队列                                       | 底层行为                                                     |
-| ------- | -------- | ------------------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------ |
-| 零      | 忽略     | 立即返回。                                                   | 保持直至发送完成。                             | 系统接管套接字并保证将数据发送至对端。                       |
-| 非零    | 零       | 立即返回。                                                   | 立即放弃。                                     | 直接发送RST包，自身立即复位，不用经过2MSL状态。对端收到复位错误号。 |
-| 非零    | 非零     | 阻塞直到l_linger时间超时或数据发送完成。(套接字必须设置为阻塞zhuan) | 在超时时间段内保持尝试发送，若超时则立即放弃。 | 超时则同第二种情况，若发送完成则皆大欢喜。                   |
-
-------
-
-
-
-```
-struct timeval maxSelectTime;
-fd_set fds;
-maxSelectTime.tv_sec = timeout / 1000000;
-maxSelectTime.tv_usec = timeout % 1000000;
-```
-
-参考：
-
-The <sys/time.h> header defines the  timeval structure that includes at least the following members:
-
-```
-/*
- * Structure returned by gettimeofday(2) system call,
- * and used in other calls.
- */
-struct timeval {
-	long	tv_sec;		/* seconds */
-	long	tv_usec;	/* and microseconds */
-};
-```
-
-------
-
-```
-FD_ZERO(&fds);
-FD_SET(_fd, &fds);
-	rc = select(maxFD + 1, NULL, &fds, NULL,
-							timeout>=0?&maxSelectTime:NULL);
+done:
+    return rc;
+error:
+    close();
+    goto done;
+}
 ```
 
-参考：
+`setsockopt(_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&temp, sizeof(int));`
 
-> ## Name
->
-> select, pselect, FD_CLR, FD_ISSET, FD_SET, FD_ZERO - synchronous I/O multiplexing
->
-> ## Synopsis
->
-> ```
-> /* According to POSIX.1-2001 */
-> #include <sys/select.h>
-> 
-> /* According to earlier standards */
-> #include <sys/time.h>
-> #include <sys/types.h>
-> #include <unistd.h>
-> 
-> int select(int nfds, fd_set *readfds, fd_set *writefds,
->            fd_set *exceptfds, struct timeval *timeout);
-> 
-> void FD_CLR(int fd, fd_set *set);
-> int  FD_ISSET(int fd, fd_set *set);
-> void FD_SET(int fd, fd_set *set);
-> void FD_ZERO(fd_set *set);
-> 
-> #include <sys/select.h>
-> 
-> int pselect(int nfds, fd_set *readfds, fd_set *writefds,
->             fd_set *exceptfds, const struct timespec *timeout,
->             const sigset_t *sigmask);
-> ```
->
-> - **pselect**(): _POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600
->
-> ## Description
->
-> **select**() and **pselect**() allow a program to monitor multiple file descriptors, waiting until one or more of the file descriptors become "ready" for some class of I/O operation (e.g., input possible). A file descriptor is considered ready if it is possible to perform the corresponding I/O operation (e.g., **read**(2)) without blocking.
->
-> The operation of **select**() and **pselect**() is identical, other than these three differences:
->
-> - (i)**select**() uses a timeout that is a *struct timeval* (with seconds and microseconds), while **pselect**() uses a *struct timespec* (with seconds and nanoseconds).(ii)**select**() may update the *timeout* argument to indicate how much time was left. **pselect**() does not change this argument.(iii)**select**() has no *sigmask* argument, and behaves as **pselect**() called with NULL *sigmask*.
-> - Three independent sets of file descriptors are watched. Those listed in *readfds* will be watched to see if characters become available for reading (more precisely, to see if a read will not block; in particular, a file descriptor is also ready on end-of-file), those in *writefds* will be watched to see if a write will not block, and those in *exceptfds* will be watched for exceptions. On exit, the sets are modified in place to indicate which file descriptors actually changed status. Each of the three file descriptor sets may be specified as NULL if no file descriptors are to be watched for the corresponding class of events.Four macros are provided to manipulate the sets. **FD_ZERO**() clears a set. **FD_SET**() and **FD_CLR**() respectively add and remove a given file descriptor from a set. **FD_ISSET**() tests to see if a file descriptor is part of the set; this is useful after **select**() returns.*nfds* is the highest-numbered file descriptor in any of the three sets, plus 1.The *timeout* argument specifies the minimum interval that **select**() should block waiting for a file descriptor to become ready. (This interval will be rounded up to the system clock granularity, and kernel scheduling delays mean that the blocking interval may overrun by a small amount.) If both fields of the *timeval* structure are zero, then **select**() returns immediately. (This is useful for polling.) If *timeout* is NULL (no timeout), **select**() can block indefinitely.*sigmask* is a pointer to a signal mask (see **sigprocmask**(2)); if it is not NULL, then **pselect**() first replaces the current signal mask by the one pointed to by *sigmask*, then does the "select" function, and then restores the original signal mask.Other than the difference in the precision of the *timeout* argument, the following **pselect**() call:`ready = pselect(nfds, &readfds, &writefds, &exceptfds,                 timeout, &sigmask);`is equivalent to *atomically* executing the following calls:` sigset_t origmask;  pthread_sigmask(SIG_SETMASK, &sigmask, &origmask);  ready = select(nfds, &readfds, &writefds, &exceptfds, timeout);  pthread_sigmask(SIG_SETMASK, &origmask, NULL);`The reason that **pselect**() is needed is that if one wants to wait for either a signal or for a file descriptor to become ready, then an atomic test is needed to prevent race conditions. (Suppose the signal handler sets a global flag and returns. Then a test of this global flag followed by a call of **select**() could hang indefinitely if the signal arrived just after the test but just before the call. By contrast, **pselect**() allows one to first block signals, handle the signals that have come in, then call **pselect**() with the desired *sigmask*, avoiding the race.)
->
-> **The timeout**
->
-> - The time structures involved are defined in *<sys/time.h>* and look like
->
->   `struct timeval {     long    tv_sec;         /* seconds */     long    tv_usec;        /* microseconds */ };`
->
-> - and
->
->   `struct timespec {     long    tv_sec;         /* seconds */     long    tv_nsec;        /* nanoseconds */ };`
->
-> - (However, see below on the POSIX.1-2001 versions.)Some code calls **select**() with all three sets empty, *nfds* zero, and a non-NULL *timeout* as a fairly portable way to sleep with subsecond precision.On Linux, **select**() modifies *timeout* to reflect the amount of time not slept; most other implementations do not do this. (POSIX.1-2001 permits either behavior.) This causes problems both when Linux code which reads *timeout* is ported to other operating systems, and when code is ported to Linux that reuses a *struct timeval* for multiple **select**()s in a loop without reinitializing it. Consider *timeout* to be undefined after **select**() returns.
->
-> ## Return Value
->
-> On success, **select**() and **pselect**() return the number of file descriptors contained in the three returned descriptor sets (that is, the total number of bits that are set in *readfds*, *writefds*, *exceptfds*) which may be zero if the timeout expires before anything interesting happens. On error, -1 is returned, and *errno* is set appropriately; the sets and *timeout* become undefined, so do not rely on their contents after an error.
+编写 TCP/SOCK_STREAM 服务程序时，SO_REUSEADDR 这个套接字选项通知内核，如果端口忙，但TCP状态位于 TIME_WAIT ，可以重用端口。如果端口忙，而TCP状态位于其他状态，重用端口时依旧得到一个错误信息，指明"地址已经使用中"。如果你的服务程序停止后想立即重启，而新套接字依旧使用同一端口，此时SO_REUSEADDR 选项非常有用。其实一般来说不使用。
+
+`setSocketLi(1,30);` 
+
+设置socketLinger，阻塞进程知道队列消息全部处理完，缓存队列的处理等待时间30ms。
+
+`::bind(_fd, (struct sockaddr*)&_sockAddress, _addressLen);`
+
+绑定socket地址信息
+
+`listen(_fd, SOMAXCONN)`
+
+进入被动监听状态，函数原型`int listen(int sock, int backlog);	//linux`。backlog 为请求队列最大长度，被动监听是套接字在没有请求时进入睡眠状态，接收到请求时被唤醒。
+
+#### 接收请求
+
+accept(), 接收请求的函数是客户发送请求过来后，服务端进行响应的函数。期间阻塞进程，直到客户发送请求。
+
+```c
+int ossSocket::accept(int *sock, struct sockaddr *addr, socklen_t *addrlen,
+                      int timeout)
+{
+    int rc = EDB_OK;
+    int maxFD = _fd;
+    struct timeval maxSelectTime;
+    fd_set fds;
+    maxSelectTime.tv_sec = timeout/1000000;
+    maxSelectTime.tv_usec = timeout%1000000;
+    while(true)
+    {
+        FD_ZERO(&fds);
+        FD_SET(_fd, &fds);
+        rc = select(maxFD+1, &fds, NULL, NULL,
+                    timeout>=0?&maxSelectTime:NULL);
+        // 0 means timeout
+        if(0==rc)
+        {
+            rc = EDB_TIMEOUT;
+            goto done;
+        }
+        // if < 0 , something wrong
+        if(0>rc)
+        {
+            rc = SOCKET_GETLASTERROR;
+            if(EINTR==rc)
+            {
+                continue;
+            }
+            PD_RC_CHECK(EDB_NETWORK, PDERROR, 
+                        "Failed to select from socket, error = %d", rc);
+        }
+        if(FD_ISSET(_fd, &fds))
+        {
+            break;
+        }
+    }
+    rc = EDB_OK;
+    *sock = ::accept(_fd, addr, addrlen);
+    if(-1 == *sock)
+    {
+        PD_RC_CHECK(EDB_NETWORK, PDERROR, 
+                    "Failed to accept socket, error = %d", SOCKET_GETLASTERROR);
+    }
+done:
+    return rc;
+error:
+    goto done;
+}
+```
+
+select()函数用来检查套接字描述符(sockets descriptors)是否已准备好读/写，提供了一种同时检查多个套接字的方法。
+
+定义：
+int select(int fd_max, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
+
+当参数中文件描述符集合fds内发生变化时，函数返回变化的描述符个数；-1：发生错误，并将所有描述符集合清0，可通过errno输出错误详情；0：超时。每次调用完select()函数后需要将文件描述符集合清空并重新设置，也就是设置的文件描述符集合是一次性使用的。原因是调用完select()后文件描述符集合可能发生改变。
+
+```c
+FD_ZERO(fd_set *fd);             /* 清空该组文件描述符集合 */
+FD_CLR(int fd,fd_set *fd);       /* 清除该组文件描述符集合中的指定文件描述符 */
+FD_ISSET(int fd,fd_set *fd);     /* 测试指定的文件描述符是否在该文件描述符集合中 */
+FD_SET(int fd,fd_set *fd);       /* 向该文件描述符集合中添加文件描述符 */
+```
+
+设置select参数READ若检测到文件描述符\_fd发生变化后，集合内保存的文件描述符_fd, 表明文件准备读取就绪，则调用accept()函数来接收客户端请求，即读取并处理数据。accept()函数返回值为新的套接字，之后的两者之间的通信则使用这个新生成的套接字。
+
+#### 客户端连接
+
+connect()函数是客户端连接到服务端的socket调用的。
+
+```c
+int ossSocket::connect()
+{
+    int rc = EDB_OK;
+    rc = ::connect(_fd, (struct sockaddr *)&_sockAddress, _addressLen);
+    if(rc)
+    {
+        PD_RC_CHECK(EDB_NETWORK, PDERROR, 
+                    "Failed to connect, error = %d", SOCKET_GETLASTERROR);
+    }
+    rc = getsockname(_fd, (sockaddr*)&_sockAddress, &_addressLen);
+    if (rc)
+    {
+        PD_RC_CHECK(EDB_NETWORK, PDERROR,
+                    "Failed to get local address, error = %d", rc);
+    }
+    // get peer address
+    rc = getpeername(_fd, (sockaddr*)&_peerAddress, &_peerAddressLen);
+    if(rc)
+    {
+        PD_RC_CHECK(EDB_NETWORK, PDERROR,
+                    "Failed to get peer address, error = %d", rc);
+    }
+
+done:
+    return rc;
+error:
+    goto done;
+}
+```
+
+ossSocket类对connect()函数封装，将连接后的双方socketAddress结构体保存到私有成员变量，\_sockAddress/\_peerAddress.
+
+#### 发送和接收
+
+**send() 发送消息**
+
+```c
+int ossSocket::send(const char *pMsg, int len,
+                    int timeout, int flags)
+{
+    int rc = EDB_OK;
+    int maxFD = _fd;
+    struct timeval maxSelectTime;
+    fd_set fds;
+
+    maxSelectTime.tv_sec = timeout / 1000000;
+    maxSelectTime.tv_usec = timeout % 1000000;
+    // if len==0 then let's just return
+    if(0==len)
+    {
+        return EDB_OK;
+    }
+    // wait loop until socket is ready
+    while(true)
+    {
+        // 清空
+        FD_ZERO(&fds);
+        // add
+        FD_SET(_fd, &fds);
+        rc = select(maxFD + 1, NULL, &fds, NULL,
+                    timeout>=0?&maxSelectTime:NULL);
+        if(0==rc)
+        {
+            // timeout
+            rc = EDB_TIMEOUT;
+            goto done;
+        }
+        // if rf < 0, someting wrong
+        if(0>rc)
+        {
+            rc = SOCKET_GETLASTERROR;
+            // failed due to interrupt, let's continue
+            if(EINTR==rc)
+            {
+                continue;
+            }
+            PD_RC_CHECK(EDB_NETWORK, PDERROR, "Failed to select from socket, error = %d",
+                    SOCKET_GETLASTERROR);
+        }
+        // FD_ISSET() tests to see if a file descriptor is part of the set; 
+        if(FD_ISSET(_fd, &fds))
+        {
+            break;
+        }
+    }
+    // 发送消息
+    while(len>0)
+    {
+        // MSG_NOSIGNAL: Requests not to send SIGPIPE on errors on stream oriented sockets
+        // when the other end breaks the connetction. The EPIPE error is still returned
+        rc = ::send(_fd, pMsg, len, MSG_NOSIGNAL|flags);
+        if (-1 == rc)
+        {
+            PD_RC_CHECK(EDB_NETWORK, PDERROR, "Failed to send, error = %d", 
+                        SOCKET_GETLASTERROR);
+        }
+        len -=rc;
+        pMsg += rc;
+    }
+    rc = EDB_OK;
+
+done:
+    return rc;
+error:
+    goto done;
+}
+
+```
+
+select()函数设置文件集合可写性，当准备好后进行socket写入操作(send)。
+
+这里对sned函数进行了二次封装，保证发送的健壮性。发送len长度的消息，发送可能截断一部分，send()函数返回完成的字节数，len减去这个字节数，消息指针移动到字节数后一个位置，重新发送，重复上述步骤直到len==0.
+
+**recv()接收函数**
+
+```c
+#define MAX_RECV_PETRIES 5
+int _ossSocket::recv(char *pMsg, int len,
+                    int timeout, int flags)
+{
+    int rc = EDB_OK;
+    int retries = 0;
+    int maxFD = _fd;
+    struct timeval maxSelectTime;
+    fd_set fds;
+
+    if(0==len)
+        return EDB_OK;
+    maxSelectTime.tv_sec = timeout/1000000;
+    maxSelectTime.tv_usec = timeout%1000000;
+    while(true)
+    {
+        FD_ZERO(&fds);
+        FD_SET(_fd, &fds);
+        rc = select(maxFD+1, &fds, NULL, NULL,
+                    timeout>=0?&maxSelectTime:NULL);
+        // 0 means timeout
+        if(0==rc)
+        {
+            rc = EDB_TIMEOUT;
+            goto done;
+        }
+        // if < 0 , something wrong
+        if(0>rc)
+        {
+            rc = SOCKET_GETLASTERROR;
+            if(EINTR==rc)
+            {
+                continue;
+            }
+            PD_RC_CHECK(EDB_NETWORK, PDERROR, 
+                        "Failed to select from socket, error = %d", 
+                        rc);
+        }
+        if(FD_ISSET(_fd, &fds))
+        {
+            break;
+        }
+    }
+    while(len > 0 )
+    {
+        rc = ::recv(_fd, pMsg, len, MSG_NOSIGNAL|flags);
+        if(rc > 0)
+        {
+            if(flags & MSG_PEEK)
+            {
+                goto done;
+            }
+            len -= rc;
+            pMsg += rc;
+        }
+        else if(rc==0)
+        {
+            PD_RC_CHECK(EDB_NETWORK_CLOSE, PDINFO, 
+                        "Peer unexcepted shutdown");
+        }
+        else
+        {
+            rc = SOCKET_GETLASTERROR;
+            if((EAGAIN==rc||EWOULDBLOCK==rc) &&
+                _timeout>0)
+            {
+                PD_RC_CHECK(EDB_NETWORK, PDERROR, 
+                            "Recv() timeout, error = %d", rc);
+            }
+            if((EINTR == rc) && (retries<MAX_RECV_PETRIES))
+            {
+                retries++;
+                continue;
+            }
+            PD_RC_CHECK(EDB_NETWORK, PDERROR, 
+                        "Recv() Failed, error = %d", rc);
+        }
+    }
+    rc = EDB_OK;
+done:
+    return rc;
+error:
+    goto done;
+}
+```
+
+select()函数部分，与send()函数类似，唯一差别在于设置文件描述符集合的可读性，当文件_fd准备好可读时，进行socket读操作(revc）
+
+recv()函数同样进行封装，保证接收的健壮性。
+
+recv的原型是ssize_t recv(int s, void *buf, size_t len, int flags); 通常flags都设置为0，此时recv函数读取tcp buffer中的数据到buf中，并从tcp buffer中移除已读取的数据。把flags设置为MSG_PEEK，仅把tcp buffer中的数据读取到buf中，并不把已读取的数据从tcp buffer中移除，再次调用recv仍然可以读到刚才读到的数据。
+
+程序从socket中读取数据，若flags设置了MSG_PEEK，意味着读取操作不移除socket内存空间数据，此时仅读取定长len的数据到pMsg；读取文件返回值<0报错，若为中断错误进行重新读取，retries次数超过定值最后报错，写入日志。
+
+#### 关闭socket文件
+
+close()函数封装
+
+```c
+void ossSocket::close()
+{
+    if(_init)
+    {
+        int i=0;
+        i = ::close(_fd);
+        if(i<0)
+            i = -1;
+        _init = false;
+    }
+}
+```
+
+最后将初始化状态置false.
+
+#### 禁用Nagle算法 心跳检测
+
+```c
+int _ossSocket::disableNagle ()
+{
+   int rc = EDB_OK ;
+   int temp = 1 ;
+   rc = setsockopt ( _fd, IPPROTO_TCP, TCP_NODELAY, (char *) &temp,
+                     sizeof ( int ) ) ;
+   if ( rc )
+   {
+      PD_LOG ( PDWARNING, "Failed to setsockopt, rc = %d", SOCKET_GETLASTERROR ) ;
+   }
+
+   rc = setsockopt ( _fd, SOL_SOCKET, SO_KEEPALIVE, (char *) &temp,
+                     sizeof ( int ) ) ;
+   if ( rc )
+   {
+      PD_LOG ( PDWARNING, "Failed to setsockopt, rc = %d", SOCKET_GETLASTERROR ) ;
+   }
+   return rc ;
+}
+```
+
+Nagle算法用于将小包封装打包发送，禁用该算法保证低延迟。SO_KEEPALIVE选项在检测到对方未响应后主动关闭TCP连接。
+
+#### 辅助函数
+
+```c
+unsigned int _ossSocket::_getPort(sockaddr_in *addr)
+{
+    return ntohs(addr->sin_port);
+}
+
+int _ossSocket::_getAddress(sockaddr_in *addr, char *pAddress, unsigned int length)
+{
+    int rc = EDB_OK;
+    length = length < NI_MAXHOST ? length : NI_MAXHOST;
+    rc = getnameinfo((struct sockaddr*)addr, sizeof(sockaddr),  pAddress, length,
+                    NULL, 0, NI_NUMERICHOST);
+    if(rc)
+    {
+        PD_RC_CHECK(EDB_NETWORK, PDERROR,
+                    "Failed to getnameinfo, error = %d", rc);
+    }
+done:
+    return rc;
+error:
+    goto done;
+}
+
+unsigned int _ossSocket::getLocalPort()
+{
+    return _getPort(&_sockAddress);
+}
+
+unsigned int _ossSocket::getPeerPort()
+{
+    return _getPort(&_peerAddress);
+}
+
+int _ossSocket::getLocalAddress(char * pAddress, unsigned int length)
+{
+    return _getAddress(&_sockAddress, pAddress, length);
+}
+
+int _ossSocket::getPeerAddress(char * pAddress, unsigned int length)
+{
+    return _getAddress(&_peerAddress, pAddress, length);
+}
+
+```
+
+各个函数功能显而易见。
+
+### 客户端socket应用设计
+
+**edb class 私有成员变量**
+
+```c
+ossSocket       _sock;
+```
+
+_sock 是客户端创建并初始化的socket文件对象。
+
+**connect 命令连接服务端socket**
+
+```c
+int ConnectCommand::execute(ossSocket &sock, std::vector<std::string> &argVec)
+{
+    int ret = EDB_OK;
+    _address = argVec[0];
+    _port = atoi(argVec[1].c_str());
+    sock.close();
+    sock.setAddress(_address.c_str(), _port);
+    ret = sock.initSocket();
+    if(ret)
+    {
+        return getError(EDB_SOCK_INIT_FAILED);
+    }
+    ret = sock.connect();
+    if(ret)
+    {
+        return getError(EDB_SOCK_CONNECT_FAILED);
+    }
+    sock.disableNagle();
+    return ret;
+}
+```
+
+这是一条执行命令的类ConnectCommand的成员函数execute()，暂时只关注它实现的功能—连接到服务端socket。argVec是解析好的用户传入命令，每个元素代表一个参数。第一个参数为目标主机地址赋值给私有成员变量\_address，第二个参数为目标主机端口号赋值给私有成员变量\_port. 
+
+先关闭sock，再根据上述地址和端口号设置socket绑定地址，然后初始化socket，并调用connect()函数进行连接socket，最后禁用Nagle算法函数。上述几个步骤进行的同时，设置异常。
+
+**sendOrder()函数** 客户端发送数据
+
+```c
+int ICommand::sendOrder(ossSocket &sock, int opCode)
+{
+    int ret = EDB_OK;
+    memset(_sendBuf, 0, SEND_BUF_SIZE);
+    char * pSendBuf = _sendBuf;
+    const char *pStr = "hello world";
+    *(int *)pSendBuf = strlen(pStr) + 1 + sizeof(int);
+    memcpy(&pSendBuf[sizeof(int)], pStr, strlen(pStr)+1);
+    ret = sock.send(pSendBuf, *(int *)pSendBuf);
+}
+```
+
+这是一个测试类型的函数，用于验证是否能够通信。ossSocket &sock传入edb类的私有成员变量\_sock；\_sendBuf是ICommand的私有成员变量，用于存储发送的数据；*(int *)pSendBuf = — 是指向字符串数组的指针pSendBuf的数组长度，计算得= 11 + 1 + 4  = 16; 由于\_sendBuf前四个字节存储消息字节数，故从sizeof(int )开始存储消息。最后调用ossSocket对象sock的send函数进行消息发送。
+
+### 服务端socket连接测试设计
+
+```c
+int pmdTcpListenerEntryPoint()
+{
+    int rc = EDB_OK;
+    int port = 12551;
+    ossSocket sock(port);
+    rc = sock.initSocket();
+    if(rc)
+    {
+        printf("Failed to initialize socket, rc = %d", rc);
+        goto error;
+    }
+    rc = sock.bind_listen();
+    if(rc)
+    {
+        printf("Failed to bid/listen socket, rc = %d", rc);
+        goto error;
+    }
+    // master loop for tcp listener
+    while(true)
+    {
+        int s;
+        rc = sock.accept(&s, NULL, NULL);
+        // if we dont get anything from period of time, lets loop
+        if(EDB_TIMEOUT == rc)
+        {
+            rc = EDB_OK;
+            continue;
+        }
+        char buffer[1024];
+        int size;
+        ossSocket sock1(&s);
+        sock1.disableNagle();
+        do
+        {
+            rc = sock1.recv((char*)&size, 4);
+            if(rc && rc!=EDB_TIMEOUT)
+            {
+                printf("Failed to receive size, rc = %d", rc);
+                goto error;
+            }
+        }while(EDB_TIMEOUT == rc);
+        do
+        {
+            rc = sock1.recv(&buffer[0], size-sizeof(int));
+            if(rc && rc!=EDB_TIMEOUT)
+            {
+                printf("Failed to receive buffer, rc = %d", rc);
+                goto error;
+            }
+        }while(EDB_TIMEOUT == rc);
+        printf("%s\n", buffer);
+        sock1.close();
+    }
+
+error:
+    switch (rc)
+    {
+    case EDB_SYS:
+        printf("system error occured");
+        break;
+    
+    default:
+        printf("internal error");
+    }
+    goto done;
+done:
+    return rc;
+}
+```
+
+设置socket监听端口为port = 12551
+
+使用ossSocket(port)的重载函数构造服务器端socket对象，并调用initSocket()函数进行初始化，最后绑定监听
+
+进入迭代循环，一直监听端口是否有客户端访问，若有访问请求，则在accept()函数得到新的socket文件描述符s，调用ossSocket(int *sock)的构造函数构造socket对象sock1，先接收消息的字节数，再传入字节数接收消息内容。最后关闭socket.
 
 ## 锁机制
 
-### 互斥锁创建
+两个锁类对互斥锁、读写锁进行封装
 
-有两种方法创建互斥锁，静态方式和动态方式。POSIX定义了一个宏PTHREAD_MUTEX_INITIALIZER 来静态初始化互斥锁，方法如下：
+### ossXLatch类 互斥锁
 
-`pthread_mutex_t mutex=PTHREAD_MUTEX_INITIALIZER;`在LinuxThreads实现中， pthread_mutex_t是一个结构，而PTHREAD_MUTEX_INITIALIZER则是一个结构常量。
+私有成员变量：
 
-动态方式是采用pthread_mutex_init()函数来初始化互斥锁，API定义如下：
+pthread_mutex_t _lock; 互斥锁
 
-` int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *mutexattr)`
-其中mutexattr用于指定互斥锁属性（见下），如果为NULL则使用缺省属性。 pthread_mutex_destroy ()用于注销一个互斥锁，API定义如下：
-` int pthread_mutex_destroy(pthread_mutex_t *mutex)`
-
-### 锁操作
-
-锁操作主要包括加锁pthread_mutex_lock()、解锁pthread_mutex_unlock()和测试加锁 pthread_mutex_trylock()三个，不论哪种类型的锁，都不可能被两个不同的线程同时得到， 而必须等待解锁。对于普通锁和适应锁类型，解锁者可以是同进程内任何线程； 而检错锁则必须由加锁者解锁才有效，否则返回EPERM；对于嵌套锁，文档和实现要求必须由 加锁者解锁，但实验结果表明并没有这种限制，这个不同目前还没有得到解释。在同一进程中 的线程，如果加锁后没有解锁，则任何其他线程都无法再获得锁。
-
-`int pthread_mutex_lock(pthread_mutex_t *mutex)`
-`int pthread_mutex_unlock(pthread_mutex_t *mutex)`
-`int pthread_mutex_trylock(pthread_mutex_t *mutex)`
-pthread_mutex_trylock() 语义与pthread_mutex_lock()类似，不同的是在锁已经被占据时返回 EBUSY而不是挂起等待。
-
-### 读者写者问题
-
-读者————写者问题是一个用信号量实现的经典进程同步问题。在系统中，一个数据集(如文件或 记录) 被几个并发进程共享，这些线程分两类，一部分只要求进行读操作，称之为“读者”； 另一类要求写或修改操作，我们称之为“写者“。一般而言，对一个数据集，为了保证数据的完整 性、正确性，允许多个读者进程同时访问，但是不允许一个写者进程同其它任何一个进程（读者 或者写者）同时访问，而这类问题就称之为"读者-写者"问题。
-
-读者优先的算法在操作系统相关的书籍中都有介绍，这是一种最简单的解决办法： 当没有写进 程正在访问共享数据集时，读进程可以进入访问，否则必须等待。而读者优先的算法存在"饿死 写者"线程的问题：只要有读者不断到来，写者就要持久地等待，直到所有的读者都读完且没有 新的读者到来时写者才能写数据集。而在很多情况下我们需要避免"饿死写者"，故而采用写者优 先算法：
-
-在写者优先算法中，我们要实现的目标是：
-
-1.要让读者与写者之间、以及写者与写者之问要互斥地访同数据集； 2.在无写进程到来时各读者可同时访问数据集； 3.在读者和写者都等待时访问时写者优先．
-
-在实现写者优先时，增加一个互斥量，用于写者优先。当有写者来时，就不在允许读者去读取数据， 等待正在读数据的读者完成以后开始写数据，以此实现写者优先。
+成员函数
 
 ```c
-#include <pthread.h>
-#include <signal.h>
-#include "apue.h"
-#define N 5 //No. of reader
-#define M 5 //No. of reading and writing
- 
-pthread_mutex_t rd = PTHREAD_MUTEX_INITIALIZER; // it's mean reader can reading
-pthread_mutex_t wr = PTHREAD_MUTEX_INITIALIZER; //it's mean writer can writing
- 
-int readCount = 0;
- 
-void* reader(void *arg)
-{
-    int n = M;
-    int id = (int)arg;
-    while (n--)
-    {
-        sleep( rand() % 3);
-        pthread_mutex_lock(&rd);
-        readCount++;
-        if( readCount == 1)
+public:
+        ossXLatch()
         {
-            pthread_mutex_lock(&wr);
+            pthread_mutex_init(&_lock, 0);
         }
-        pthread_mutex_unlock(&rd);
- 
-        printf("reader %d is reading\n", id);
-        sleep( rand() % 3);
- 
-        pthread_mutex_lock(&rd);
-        readCount--;
-        if (readCount == 0)
+        ~ossXLatch()
         {
-            pthread_mutex_unlock(&wr);
+            pthread_mutex_destroy(&_lock);
         }
-        pthread_mutex_unlock(&rd);
-        printf("reader %d is leaving\n", id);
-    }
-    printf("----reader %d has done----\n", (int)arg);
-}
- 
-void* writer(void *arg)
-{
-    int n = M;
-    while (n--)
-    {
-        sleep( rand() % 3);
-        pthread_mutex_lock(&wr);
-        printf("\twriter is writing\n");
-        sleep( rand() % 3);
-        pthread_mutex_unlock(&wr);
-        printf("\twriter is leaving\n");
-    }
-    printf("----writer has done----\n");
- 
-}
- 
- 
-int main(int argc, const char *argv[])
-{
-    int err;
-    pthread_t tid[N], writerTid;
-    int i;
- 
- 
-    err = pthread_create(&writerTid, NULL, writer, (void *)NULL);
-    if (err != 0)
-    {
-        err_quit("can't create process for writer");
-    }
- 
-    for (i = 0; i < N; i++)
-    {
-        err = pthread_create(&tid[i], NULL, reader, (void *)(i+1));
-        if (err != 0)
+        void get()
         {
-            err_quit("can't create process for reader");
+            pthread_mutex_lock(&_lock);
         }
-    }
-    pause();
-    return 0;
-}
-```
-
-### 读写锁
-
-读写锁适合于对数据结构的读次数比写次数多得多的情况.因为,读模式锁定时可以共享,以写 模式锁住时意味着独占,所以读写锁又叫共享-独占锁.
-
-初始化和销毁:
-
-```c
-include <pthread.h>
-pthread_rwlock_t _lock;	// 声明一个读写锁
-int pthread_rwlock_init(pthread_rwlock_t *restrict rwlock, const
-    pthread_rwlockattr_t *restrict attr);
-int pthread_rwlock_destroy(pthread_rwlock_t *rwlock);
-```
-
-
-成功则返回0,出错则返回错误编号. 同互斥量以上,在释放读写锁占用的内存之前,需要先通过 pthread_rwlock_destroy对读写锁进行清理工作, 释放由init分配的资源.
-
-读和写:
-
-```c
-include <pthread.h>
-
-int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock);
-int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock);
-int pthread_rwlock_unlock(pthread_rwlock_t *rwlock);
-```
-
-成功则返回0,出错则返回错误编号.这3个函数分别实现获取读锁,获取写锁和释放锁的操作.获 取锁的两个函数是阻塞操作,同样,非阻塞的函数为:
-
-```c
-include <pthread.h>
-
-int pthread_rwlock_tryrdlock(pthread_rwlock_t *rwlock);
-int pthread_rwlock_trywrlock(pthread_rwlock_t *rwlock);
-```
-
-
-成功则返回0,出错则返回错误编号.非阻塞的获取锁操作,如果可以获取则返回0,否则返回 错误的EBUSY.
-
-解决读者写者问题
-
-```c
-#include <pthread.h>
-#include <signal.h>
-#include "apue.h"
-#define N 5 //No. of reader
-#define M 5 //No. of reading and writing
- 
-pthread_rwlock_t lock; //it's mean writer can writing
- 
-int readCount = 0;
- 
-void* reader(void *arg)
-{
-    int n = M;
-    int id = (int)arg;
-    while (n--)
-    {
-        sleep( rand() % 3);
-        pthread_rwlock_rdlock(&lock);
-        printf("reader %d is reading\n", id);
-        sleep( rand() % 3);
- 
-        pthread_rwlock_unlock(&lock);
-        printf("reader %d is leaving\n", id);
-    }
-    printf("----reader %d has done----\n", (int)arg);
-}
- 
-void* writer(void *arg)
-{
-    int n = M;
-    while (n--)
-    {
-        sleep( rand() % 3);
-        pthread_rwlock_wrlock(&lock);
-        printf("\twriter is writing\n");
-        sleep( rand() % 3);
-        pthread_rwlock_unlock(&lock);
-        printf("\twriter is leaving\n");
-    }
-    printf("----writer has done----\n");
-}
- 
-int main(int argc, const char *argv[])
-{
-    int err;
-    pthread_t tid[N], writerTid;
-    int i;
- 
-    err = pthread_create(&writerTid, NULL, writer, (void *)NULL);
-    if (err != 0)
-    {
-        err_quit("can't create process for writer");
- 
-    }
- 
-    pthread_rwlock_init(&lock, NULL);
-    for (i = 0; i < N; i++)
-    {
-        err = pthread_create(&tid[i], NULL, reader, (void *)(i+1));
-        if (err != 0)
+        void release()
         {
-            err_quit("can't create process for reader");
+            pthread_mutex_unlock(&_lock);
         }
-    }
-    pause();
-    pthread_rwlock_destroy(&lock);
-    return 0;
-}
+        bool try_get()
+        {
+            return (pthread_mutex_trylock(&_lock)==0);
+        }
 ```
 
-### 代码注释
+### ossSLatch类 读写锁
 
-ossXLatch	互斥锁
+私有成员变量：
 
-ossSLatch	读写锁
+pthread_rwlock_t _lock;
+
+成员函数：
+
+```c
+				ossSLatch()
+        {
+            pthread_rwlock_init(&_lock, 0);
+        }
+        ~ossSLatch()
+        {
+            pthread_rwlock_destroy(&_lock);
+        }
+        void get()
+        {
+            pthread_rwlock_wrlock(&_lock);
+        }
+        void release()
+        {
+            pthread_rwlock_unlock(&_lock);
+        }
+        bool try_get()
+        {
+            return (pthread_rwlock_trywrlock(&_lock)==0);
+        }
+        void get_shared()
+        {
+            pthread_rwlock_rdlock(&_lock);
+        }
+        void release_shared()
+        {
+            pthread_rwlock_unlock(&_lock);
+        }
+        bool try_get_shared()
+        {
+            return (pthread_rwlock_tryrdlock(&_lock)==0);
+        }
+```
+
+加锁的封装暂时不关注。
 
 ## 文件操作
 
-### 文件描述符
+### ossPrimitiveFileOp 类 文件操作封装
 
-   1、对于内核而言，所有打开文件都由文件描述符引用。文件描述符是一个非负整数。当打开一个现存文件或者创建一个新文件时，内核向进程返回一个文件描述符。当读写一个文件时，用open和creat返回的文件描述符标识该文件，将其作为参数传递给read和write。
+文件操作创建一个ossPrimitiveFileOp类，类内包含句柄\_fileHandle, 是否设置标准输出\_bisStdout等私有成员变量；类内公有成员函数 Open()/Close() 打开文件/关闭文件，Read()/Write() 读/写数据，seekToOffset() 跳转文件游标位置等。
 
-按照惯例，UNIX shell使用文件描述符0与进程的标准输入相结合，文件描述符1与标准输出相结合，文件描述符2与标准错误输出相结合。STDIN_FILENO、STDOUT_FILENO、STDERR_FILENO这几个宏代替了0、1、2这几个魔数。
+#### 私有成员与构造函数
 
-​    2、文件描述符，这个数字在一个进程中表示一个特定含义，当我们open一个文件时，操作系统在内存中构建了一些数据结构来表示这个动态文件，然后返回给应用程序一个数字作为文件描述符，这个数字就和我们内存中维护的这个动态文件的这些数据结构绑定上了，以后我们应用程序如果要操作这个动态文件，只需要用这个文件描述符区分。
-
-​    3、文件描述符的作用域就是当前进程，出了这个进程文件描述符就没有意义了。
-
-open函数打开文件，打开成功返回一个文件描述符，打开失败，返回-1。
-
-### 代码注释
-
-------
-
-
+定义私有成员变量_fileHandle, 是文件操作对象操纵具体文件的文件描述符。
 
 ```c
 class ossPrimitiveFileOp
@@ -863,17 +999,35 @@ class ossPrimitiveFileOp
         handleType  _fileHandle;
 ```
 
-定义私有成员变量_fileHandle, 是文件操作对象操纵具体文件的文件描述符。
+声明无法直接生成对象的的构造函数
 
 ```c
 private:
         // 构造方法的两种方式 禁止从一个对象生成另外一个对象
+				// 将()表达式写为私有成员 用户将不能调用
         ossPrimitiveFileOp(const ossPrimitiveFileOp &){};
+				// 重载‘=’运算符号为私有成员，用户不能调用
         const ossPrimitiveFileOp &operator=(const ossPrimitiveFileOp &);
+				// 是否为标准输出
         bool _bIsStdout;
 ```
 
-------
+#### 构造函数
+
+```c
+ossPrimitiveFileOp::ossPrimitiveFileOp()
+{
+    _fileHandle = OSS_INVALID_HANDLE_FD_VALUE;
+    _bIsStdout  = false;
+}
+```
+
+OSS_INVALID_HANDLE_FD_VALUE 为定义的宏 `#define OSS_INVALID_HANDLE_FD_VALUE (-1)` -1的文件描述符表示非法。
+
+#### Open() 打开文件函数
+
+函数声明：
+
 
 ```c
 int Open
@@ -883,6 +1037,67 @@ int Open
    ) ;
 // optoins->打开方式 reading only or writing only etc.
 ```
+
+函数定义：
+
+```c
+int ossPrimitiveFileOp::Open(const char * pFilePath, unsigned int options)
+{
+    int rc = 0;
+    int mode = O_RDWR;
+
+    if(options & OSS_PRIMITIVE_FILE_OP_READ_ONLY)
+    {
+        mode = O_RDONLY;
+    }
+    else if(options & OSS_PRIMITIVE_FILE_OP_WRITE_ONLY)
+    {
+        mode = O_WRONLY;
+    }
+    
+    if(options & OSS_PRIMITIVE_FILE_OP_OPEN_EXISTING)
+    {
+
+    }
+    else if(options & OSS_PRIMITIVE_FILE_OP_OPEN_ALWAYS)
+    {
+        mode |= O_CREAT;
+    }
+    if(options & OSS_PRIMITIVE_FILE_OP_OPEN_TRUNC)
+    {
+        mode |= O_TRUNC;
+    }
+    
+    do
+    {
+        _fileHandle = oss_open(pFilePath, mode, 0644);
+    }while((-1==_fileHandle)&&(EINTR == errno));
+    if(_fileHandle <= OSS_INVALID_HANDLE_FD_VALUE)
+    {
+        rc = errno;
+        goto exit;
+    }
+
+exit:
+    return rc;
+
+}
+
+```
+
+选项options的宏定义：
+
+```c
+#define OSS_PRIMITIVE_FILE_OP_READ_ONLY         (((unsigned int)1) << 1)
+#define OSS_PRIMITIVE_FILE_OP_WRITE_ONLY        (((unsigned int)1) << 2)
+#define OSS_PRIMITIVE_FILE_OP_OPEN_EXISTING     (((unsigned int)1) << 3)
+#define OSS_PRIMITIVE_FILE_OP_OPEN_ALWAYS       (((unsigned int)1) << 4)
+#define OSS_PRIMITIVE_FILE_OP_OPEN_TRUNC        (((unsigned int)1) << 5)
+```
+
+传入的options参数通过位的与操作，判断打开文件时选择的打开方式：O_RDONLY or O_WRONLY or O_RDWR。详见文件IO。
+
+oss_open 是对open64的宏定义，open64()函数 原型：`int open64(const char *pathname, int oflag,...);` 
 
 open64() 与open()类似 ，是linux提供文件操作API的扩展方法，
 
@@ -908,207 +1123,210 @@ The `open64()` function is a part of the large file extensions, and is equivalen
 
 The file offset used to mark the current position within the file is set to the beginning of the file.
 
-The file status flags and file access modes of the open file description are set according to the value of *oflag*. The value of *oflag* is the bitwise inclusive-OR of values from the following lists.
+The file status flags and file access modes of the open file description are set according to the value of *oflag*. 
 
-Applications must specify exactly one of the following three values (file access modes) in the value of *oflag*:
-
-- `O_RDONLY` 
-
-  Open for reading only.
-
-- `O_WRONLY` 
-
-  Open for writing only.
-
-- `O_RDWR` 
-
-  Open for both reading and writing.
-
-当我们附带了权限后，打开的文件就只能按照这种权限来操作。以上这三个常数中应当只指定一 个。下列常数是可选择的：     
-
-​        O_CREAT 若文件不存在则创建它。使用此选项时，需要同时说明第三个参数mode，用其说明该新文件的存取许可权限。
-
-​        O_EXCL 如果同时指定了OCREAT，而文件已经存在，则出错。这可测试一个文件是
-
-否存在，如果不存在则创建此文件成为一个原子操作。
-
-​        O_APPEND 每次写时都加到文件的尾端。
-
-​        O_TRUNC 属性去打开文件时，如果这个文件中本来是有内容的，而且为只读或只写成功打开，则将其长度截短为0。
-
-------
+#### Close() 关闭文件函数
 
 ```c
-
-   do
-   {
-      _fileHandle = oss_open( pFilePath, mode, 0644 ) ;
-   } while (( -1 == _fileHandle ) && ( EINTR == errno )) ;
+void ossPrimitiveFileOp::Close()
+{
+    if(isValid()&&(!_bIsStdout))
+    {
+        oss_close(_fileHandle);
+        _fileHandle = OSS_INVALID_HANDLE_FD_VALUE;
+    }
+}
 ```
 
-尝试打开指定路径*pFilePath的文件，
+oss_close 是Unix文件操作close的宏定义，close函数原型：`int close(int fd);`在调用关闭函数之前，判断文件是否非法以及是否是标准输出(标准输出不能关闭)，调用close函数后，将对象的成员变量_fileHandle设置为非法状态。
 
-**errno**
+#### Read() 读文件
 
-NAME  
+函数原型：`Read(const size_t size, void * const pBuffer,  int * const pBytesRead)`
 
-```
-       errno - number of last error
-```
+size_t size, 要读取的字节数 正数size_t.
 
-SYNOPSIS      
+void * const pBuffer, 指向任意类型存储空间的不可变指针，指向的是读取数据完成后数据保存的内存空间。
 
-```
-       #include <errno.h>
-```
-
-DESCRIPTION      
-
-```
-       The <errno.h> header file defines the integer variable errno, which
-       is set by system calls and some library functions in the event of an
-       error to indicate what went wrong.
-```
-
-------
-
-lseek
-
-lseek - reposition read/write file offset
-
-Synopsis
-
-\#include <sys/types.h>
-
-\#include <unistd.h>
-
-**off_t lseek(int** *fd***, off_t** *offset***, int** *whence***);**
-
-Description
-
-The lseek() function repositions the offset of the open file associated with the file descriptor fd to the argument offset according to the directive whence as follows:
-
-- **SEEK_SET**
-
-  The offset is set to *offset* bytes.
-
-- **SEEK_CUR**
-
-  The offset is set to its current location plus *offset* bytes.
-
-- **SEEK_END**
-
-  The offset is set to the size of the file plus *offset* bytes.
-
-The **lseek**() function allows the file offset to be set beyond the end of the file (but this does not change the size of the file). If data is later written at this point, subsequent reads of the data in the gap (a "hole") return null bytes (aq\0aq) until data is actually written into the gap.
-
-------
+int * const pBytesRead, 指向int的不可变指针，指向的是读取数据完成后读取到的数据长度保存的内存空间。
 
 ```c
-do
-      {
-         bytesRead = oss_read( _fileHandle, pBuffer, size ) ;
-      } while (( -1 == bytesRead ) && ( EINTR == errno )) ;
-      if ( -1 == bytesRead )
-      {
-         goto err_read ;
-      }
+int ossPrimitiveFileOp::Read(const size_t size,
+                             void * const pBuffer,
+                             int * const pBytesRead)
+{
+    int retval = 0;
+    ssize_t bytesRead = 0;
+    if(isValid())
+    {
+        do
+        {
+            bytesRead = oss_read(_fileHandle, pBuffer, size);
+        } while ((-1 == bytesRead) && (EINTR == errno));
+        if(-1 == bytesRead)
+        {
+            goto err_read;
+        }
+    }
+    else
+    {
+        goto err_read;
+    }
+    if(pBytesRead)
+    {
+        *pBytesRead = bytesRead;
+    }
+exit:
+    return retval;
+err_read:
+    *pBytesRead = 0;
+    retval = errno;
+    goto exit;
+}
 ```
 
+oss_read 是Unix文件操作read的宏定义，read函数原型 `ssize_t read(int fd, void *buf, size_t, n);` read读取失败返回-1，进入异常处理：读取到的数据长度设置为0，返回错误代码
 
+Write() 写入文件
 
-Name
+函数原型：`ossPrimitiveFileOp::Write(const void *pBuffer, size_t size)`
 
-read - read from a file descriptor
+const void *pBuffer, 写入的数据存储空间。
 
-Synopsis
-
-```
-#include <unistd.h>
-ssize_t read(int fd, void *buf, size_t count);
-```
-
-Description
-
-read() attempts to read up to count bytes from file descriptor fd into the buffer starting at buf.
-
-On files that support seeking, the read operation commences at the current file offset, and the file offset is incremented by the number of bytes read. If the current file offset is at or past the end of file, no bytes are read, and **read**() returns zero.
-
-If *count* is zero, **read**() *may* detect the errors described below. In the absence of any errors, or if **read**() does not check for errors, a **read**() with a *count* of 0 returns zero and has no other effects.
-
-If *count* is greater than **SSIZE_MAX**, the result is unspecified.
-
-Return Value
-
-On success, the number of bytes read is returned (zero indicates end of file), and the file position is advanced by this number. It is not an error if this number is smaller than the number of bytes requested; this may happen for example because fewer bytes are actually available right now (maybe because we were close to end-of-file, or because we are reading from a pipe, or from a terminal), or because read() was interrupted by a signal. On error, -1 is returned, and errno is set appropriately. In this case it is left unspecified whether the file position (if any) changes.
-
-------
-
-`int ossPrimitiveFileOp::Write( const void * pBuffer, size_t size )`
+size_t size, 正数的写入的数据存储空间字节数。
 
 ```c
-do
-      {
-         rc = oss_write( _fileHandle, &((char*)pBuffer)[currentSize],
-                         size-currentSize ) ;
-         if ( rc >= 0 )
-            currentSize += rc ;
-      } while ((( -1 == rc ) && ( EINTR == errno )) ||
-               (( -1 != rc ) && ( currentSize != size ))) ;
-```
+int ossPrimitiveFileOp::Write(const void *pBuffer, size_t size)
+{
+    int rc = 0;
+    size_t currentSize = 0;
+    if(0==size)
+    {
+        size = strlen((char *)pBuffer);
+    }
 
-循环的方法写入文件
+    if(isValid())
+    {
+        do
+        {
+            rc = oss_write(_fileHandle, &((char *)pBuffer)[currentSize], 
+                            size-currentSize);
+            if(rc > 0)
+                currentSize += rc;
+        }while(((-1 == rc) && (EINTR == errno)) ||
+                ((-1 != rc) && (currentSize != size)));
+        
+        if(-1 == rc)
+        {
+            rc = errno;
+            goto exit;
+        }
+        rc = 0;
+    }
+exit:
+    return rc;
 
-NAME        
-
-```
-       write - write to a file descriptor
-```
-
-SYNOPSIS        
-
-```
-       #include <unistd.h>
-
-       ssize_t write(int fd, const void *buf, size_t count);
-```
-
-DESCRIPTION        
-
-```
-       write() writes up to count bytes from the buffer starting at buf to
-       the file referred to by the file descriptor fd.
-
-       The number of bytes written may be less than count if, for example,
-       there is insufficient space on the underlying physical medium, or the
-       RLIMIT_FSIZE resource limit is encountered (see setrlimit(2)), or the
-       call was interrupted by a signal handler after having written less
-       than count bytes.  (See also pipe(7).)
-
-       For a seekable file (i.e., one to which lseek(2) may be applied, for
-       example, a regular file) writing takes place at the file offset, and
-       the file offset is incremented by the number of bytes actually
-       written.  If the file was open(2)ed with O_APPEND, the file offset is
-       first set to the end of the file before writing.  The adjustment of
-       the file offset and the write operation are performed as an atomic
-       step.
-
-       POSIX requires that a read(2) that can be proved to occur after a
-       write() has returned will return the new data.  Note that not all
-       filesystems are POSIX conforming.
-
-       According to POSIX.1, if count is greater than SSIZE_MAX, the result
-       is implementation-defined; see NOTES for the upper limit on Linux.
-```
-
-RETURN VALUE        
+}
 
 ```
-       On success, the number of bytes written is returned.  On error, -1 is
-       returned, and errno is set to indicate the cause of the error.
+
+oss_write 是对Unix 文件操作write的宏定义，其函数原型：`ssize_t write(int fd, const void *buf, size_t n);`这里设置了currentSize标记已经读取到的字节个数。下次迭代传入的写入字节数变为size-currentSize.
+
+#### 文件游标跳转seek
+
+**seekToEnd() 跳转到文件末尾**
+
+```c
+void ossPrimitiveFileOp::seekToEnd(void)
+{
+    oss_lseek(_fileHandle, 0, SEEK_END);
+}
 ```
 
- 
+oss_lseek 是Unix文件操作lseek64的宏定义，seek函数原型：`off_t lseek(int filedes, off_t offset, int whence);` whence 是跳转标记，as follows:
+
+-   **SEEK_SET**
+
+    The offset is set to *offset* bytes.
+
+-   **SEEK_CUR**
+
+    The offset is set to its current location plus *offset* bytes.
+
+-   **SEEK_END**
+
+    The offset is set to the size of the file plus *offset* bytes.
+
+**getCurrentOffset() 获取当前游标偏移量**
+
+```c
+offsetType ossPrimitiveFileOp::getCurrentOffset() const
+{
+    return oss_lseek(_fileHandle, 0, SEEK_CUR);
+}
+```
+
+**seekToOffset() 跳转到指定偏移量的位置**
+
+```
+void ossPrimitiveFileOp::seekToOffset(offsetType offset)
+{
+    if((oss_off_t)-1 != offset)
+    {
+        oss_lseek(_fileHandle, offset, SEEK_SET);
+    }
+}
+```
+
+#### getSize() 获取文件大小
+
+```c
+int ossPrimitiveFileOp::getSize(offsetType *const pFileSize)
+{
+    int rc = 0;
+    oss_struct_stat buf = {0};
+
+    if(-1 == oss_fstat(_fileHandle, &buf))
+    {
+        rc = errno;
+        goto err_exit;
+    }
+    *pFileSize = buf.st_size;
+
+exit:
+    return rc;
+err_exit:
+    *pFileSize = 0;
+    goto exit;
+}
+```
+
+oss_fstat是对Unix文件操作fstat64的宏定义，其函数原型：`int fstat64(int fildes, struct stat64 *buf);`传入参数buf为struct stat64结构体stat类型，where status information about the file is to be placed. offsetType *const fFileSize 是指向off64_t类型的不可变指针，用于存储查询到的文件大小：buf.st_size.
+
+>   **errno**
+>
+>   NAME  
+>
+>   ```
+>          errno - number of last error
+>   ```
+>
+>   SYNOPSIS      
+>
+>   ```
+>          #include <errno.h>
+>   ```
+>
+>   DESCRIPTION      
+>
+>   ```
+>          The <errno.h> header file defines the integer variable errno, which
+>          is set by system calls and some library functions in the event of an
+>          error to indicate what went wrong.
+>   ```
+>
+
+
 
 ------
 
@@ -1133,154 +1351,96 @@ int ossPrimitiveFileOp::fWrite( const char * format, ... )
 
 `(...)`参数使用va_list 读取，保存在ap变量中，va_start(ap, format)表示序列化开始使用，vsnprintf(buf, sizeof(buf), format, ap)表示将按照字符个数(sizeof(buf))将格式化的字符串赋值给buf. 最后以va_end(ap) 结束序列化。
 
- Description
+缺省参数格式化读取 va_start
 
-The C library macro **void va_start(va_list ap, last_arg)** initializes **ap** variable to be used with the **va_arg** and **va_end** macros. The **last_arg** is the last known fixed argument being passed to the function i.e. the argument before the ellipsis.
-
-This macro must be called before using **va_arg** and **va_end**.
-
-Declaration
-
-Following is the declaration for va_start() macro.
-
-```
-void va_start(va_list ap, last_arg);
-```
-
-Parameters
-
-- **ap** − This is the object of **va_list** and it will hold the information needed to retrieve the additional arguments with **va_arg**.
-- **last_arg** − This is the last known fixed argument being passed to the function.
-
-Example
-
-The following example shows the usage of va_start() macro.
-
-```
-#include<stdarg.h>
-#include<stdio.h>
-
-int sum(int, ...);
-
-int main(void) {
-   printf("Sum of 10, 20 and 30 = %d\n",  sum(3, 10, 20, 30) );
-   printf("Sum of 4, 20, 25 and 30 = %d\n",  sum(4, 4, 20, 25, 30) );
-
-   return 0;
-}
-
-int sum(int num_args, ...) {
-   int val = 0;
-   va_list ap;
-   int i;
-
-   va_start(ap, num_args);
-   for(i = 0; i < num_args; i++) {
-      val += va_arg(ap, int);
-   }
-   va_end(ap);
- 
-   return val;
-}
-```
-
-Let us compile and run the above program to produce the following result −
-
-```
-Sum of 10, 20 and 30 = 60
-Sum of 4, 20, 25 and 30 = 79
-```
-
-**vsprintf**
-
-```
-int vsprintf (char * s, const char * format, va_list arg );
-```
-
-Write formatted data from variable argument list to string
-
-Composes a string with the same text that would be printed if *format* was used on [printf](http://www.cplusplus.com/printf), but using the elements in the variable argument list identified by *arg* instead of additional function arguments and storing the resulting content as a *C string* in the buffer pointed by *s*.
-
-Internally, the function retrieves arguments from the list identified by *arg* as if [va_arg](http://www.cplusplus.com/va_arg) was used on it, and thus the state of *arg* is likely to be altered by the call.
-
-In any case, *arg* should have been initialized by [va_start](http://www.cplusplus.com/va_start) at some point before the call, and it is expected to be released by [va_end](http://www.cplusplus.com/va_end) at some point after the call.
-
-Parameters
-
-- s
-
-  Pointer to a buffer where the resulting C-string is stored. The buffer should be large enough to contain the resulting string.
-
-- format
-
-  C string that contains a format string that follows the same specifications as *format* in [printf](http://www.cplusplus.com/printf) (see [printf](http://www.cplusplus.com/printf) for details).
-
-- arg
-
-  A value identifying a variable arguments list initialized with [va_start](http://www.cplusplus.com/va_start). [va_list](http://www.cplusplus.com/va_list) is a special type defined in <cstdarg>.
-
-  ------
-
-  `int ossPrimitiveFileOp::getSize( offsetType * const pFileSize )`
-
-```c
-oss_struct_stat buf       = { 0 } ;
-if ( -1 == oss_fstat( _fileHandle, &buf ) )
-   {
-      rc = errno ;
-      goto err_exit ;
-   }
-
-   *pFileSize = buf.st_size ;
-```
-
-oss_fstat 函数原型：Gets information about an open file.
-
-```
-#define oss_fstat          fstat64
-
-```
-
-SYNOPSIS
-
-```
-#include <sys/types.h>
-#include <sys/stat.h>
-int fstat(int *fildes*, struct stat **buf*);
-int lstat(const char **pathname*, struct stat **buf*);
-int stat(const char **pathname*, struct stat **buf*);
-int fstat64(int *fildes*, struct stat64 **buf*);
-int lstat64(const char **pathname*, struct stat64 **buf*);
-int stat64(const char **pathname*, struct stat64 **buf*);
-```
-
-DESCRIPTION
-
-The `stat()` function gets information about the named file and writes it to the area that *buf* points to. `stat()` updates any time-related fields before writing into the `stat` structure. The system must be able to search all directories leading to the file; however, read, write, or execute permission of the file is not required.
-
-The `fstat()` function is identical to `stat()`, except that the file whose information is retrieved is specified by file descriptor rather than file name.
-
-The `lstat()` function has the same effect as `stat()`, except when the specified path refers to a symbolic link. In that case, `lstat()` returns information about the link, while `stat()` returns information about the file the link references.
-
-The `fstat64()`, `lstat64()`, and `stat64()` functions are identical to the `fstat()`, `lstat()` and `stat()` functions except that they take a pointer to `struct stat64` instead of `struct stat`. This permits applications to determine the size of a file that is larger than 2 gigabyes.
-
-PARAMETERS
-
-- *pathname* 
-
-  Points to a path name that names a file. The calling process must have at least search permissions on *pathname*.
-
-- *fildes* 
-
-  Is a file descriptor referring to a file for which status is returned.
-
-- *buf* 
-
-  Points to a `stat` or `stat64` structure where status information about the file is to be placed.
-
-RETURN VALUES
-
-If successful, these functions return a value of zero. 
+>    Description
+>
+>   The C library macro **void va_start(va_list ap, last_arg)** initializes **ap** variable to be used with the **va_arg** and **va_end** macros. The **last_arg** is the last known fixed argument being passed to the function i.e. the argument before the ellipsis.
+>
+>   This macro must be called before using **va_arg** and **va_end**.
+>
+>   Declaration
+>
+>   Following is the declaration for va_start() macro.
+>
+>   ```
+>   void va_start(va_list ap, last_arg);
+>   ```
+>
+>   Parameters
+>
+>   - **ap** − This is the object of **va_list** and it will hold the information needed to retrieve the additional arguments with **va_arg**.
+>   - **last_arg** − This is the last known fixed argument being passed to the function.
+>
+>   Example
+>
+>   The following example shows the usage of va_start() macro.
+>
+>   ```c
+>   #include<stdarg.h>
+>   #include<stdio.h>
+>   
+>   int sum(int, ...);
+>   
+>   int main(void) {
+>      printf("Sum of 10, 20 and 30 = %d\n",  sum(3, 10, 20, 30) );
+>      printf("Sum of 4, 20, 25 and 30 = %d\n",  sum(4, 4, 20, 25, 30) );
+>   
+>      return 0;
+>   }
+>   
+>   int sum(int num_args, ...) {
+>      int val = 0;
+>      va_list ap;
+>      int i;
+>   
+>      va_start(ap, num_args);
+>      for(i = 0; i < num_args; i++) {
+>         val += va_arg(ap, int);
+>      }
+>      va_end(ap);
+>    
+>      return val;
+>   }
+>   ```
+>
+>   Let us compile and run the above program to produce the following result −
+>
+>   ```
+>   Sum of 10, 20 and 30 = 60
+>   Sum of 4, 20, 25 and 30 = 79
+>   ```
+>
+>   **vsprintf**
+>
+>   ```
+>   int vsprintf (char * s, const char * format, va_list arg );
+>   ```
+>
+>   Write formatted data from variable argument list to string
+>
+>   Composes a string with the same text that would be printed if *format* was used on [printf](http://www.cplusplus.com/printf), but using the elements in the variable argument list identified by *arg* instead of additional function arguments and storing the resulting content as a *C string* in the buffer pointed by *s*.
+>
+>   Internally, the function retrieves arguments from the list identified by *arg* as if [va_arg](http://www.cplusplus.com/va_arg) was used on it, and thus the state of *arg* is likely to be altered by the call.
+>
+>   In any case, *arg* should have been initialized by [va_start](http://www.cplusplus.com/va_start) at some point before the call, and it is expected to be released by [va_end](http://www.cplusplus.com/va_end) at some point after the call.
+>
+>   Parameters
+>
+>   - s
+>
+>     Pointer to a buffer where the resulting C-string is stored. The buffer should be large enough to contain the resulting string.
+>
+>   - format
+>
+>     C string that contains a format string that follows the same specifications as *format* in [printf](http://www.cplusplus.com/printf) (see [printf](http://www.cplusplus.com/printf) for details).
+>
+>   - arg
+>
+>     A value identifying a variable arguments list initialized with [va_start](http://www.cplusplus.com/va_start). [va_list](http://www.cplusplus.com/va_list) is a special type defined in <cstdarg>.
+>
+>     
+>
 
 ## 日志管理
 
@@ -1836,261 +1996,1382 @@ const char *p = NULL; // p的地址为const
     }
 ```
 
-### boost::program_options 用法详解
+## 客户端设计Client
 
-> **boost::program_options 用法详解**
-> **简介**
-> program options是一系列pair<name,value>组成的选项列表,它允许程序通过命令行或配置文件来读取这些参数选项.
->
-> **主要组件**
-> program_options的使用主要通过下面三个组件完成：
->
-> | 组件名                          | 作用                         |
-> | ------------------------------- | ---------------------------- |
-> | options_description(选项描述器) | 描述当前的程序定义了哪些选项 |
-> | parse_command_line(选项分析器)  | 解析由命令行输入的参数       |
-> | variables_map(选项存储器)       | 容器,用于存储解析后的选项    |
->
-> **代码流程**
->
-> 1. 构造option_description对象和variables_map对象
-> 2. add_options()->向option_description对象添加选项
-> 3. parse_command_line()->将命令行输入的参数解析出来
-> 4. store()->将解析出的选项存储至variables_map中
-> 5. notify()->通知variables_map去更新所有的外部变量
-> 6. count()->检测某个选项是否被输入
-> 7. operator[]->取出选项的值
->
-> **示例一**
-> 下面的代码是boost::program_options的一个简单的用法示例.
-> 该示例中指定了两个选项,分别是–-help和–-filename.
->
-> //linux系统下,编译选项需加上 -lboost_program_options
->
-> ```c++
-> # include <iostream>
-> 
-> # include <string>
-> 
-> # include <boost/program_options.hpp>
-> 
-> namespace  bpo = boost::program_options;
-> 
-> int main(int argc, char const *argv[])
-> {
->     //步骤一: 构造选项描述器和选项存储器
->     //选项描述器,其参数为该描述器的名字
->     bpo::options_description opts("all options"); 
->     //选项存储器,继承自map容器
->     bpo::variables_map vm;
->     //步骤二: 为选项描述器增加选项
->     //其参数依次为: key, value的类型，该选项的描述
->     opts.add_options()  
->     ("filename", bpo::value<std::string>(), "the file name which want to be found")
->     ("help", "this is a program to find a specified file");
-> 
->     //步骤三: 先对命令行输入的参数做解析,而后将其存入选项存储器
->     //如果输入了未定义的选项，程序会抛出异常，所以对解析代码要用try-catch块包围
->     try{
->         //parse_command_line()对输入的选项做解析
->         //store()将解析后的结果存入选项存储器
->         bpo::store(bpo::parse_command_line(argc, argv, opts), vm);
->     }
->     catch(...){
->         std::cout << "输入的参数中存在未定义的选项！\n";
->         return 0;
->     }
-> 
->     //步骤四: 参数解析完毕，处理实际信息
->     //count()检测该选项是否被输入
->     if(vm.count("help") ){//若参数中有help选项
->         //options_description对象支持流输出， 会自动打印所有的选项信息
->         std::cout << opts << std::endl;   
->     }
->     if(vm.count("filename") ){
->         //variables_map(选项存储器)是std::map的派生类,可以像关联容器一样使用,
->         //通过operator[]来取出其中的元素.但其内部的元素类型value_type是boost::any,
->         //用来存储不确定类型的参数值,必须通过模板成员函数as<type>()做类型转换后,
->         //才能获取其具体值.
->         std::cout << "find " << vm["filename"].as<std::string>() << std::endl;
->     }
->     if(vm.empty() ){
->         std::cout << "no options found \n";
->     }
->     return 0;
-> }
-> ```
-> 
->
-> 在编译后(`g++ -I../boost -L../boost/stage/lib ./test.cpp -o test -lboost_program_options`)
-> 输入
->
-> ./test --help
->
-> 则其输出为:
->
-> all options:
->   --filename arg        the file name which want to be found
->   --help                this is a program to find a specified file
->
-> 输入
->
-> ./test --filename sd
->
-> 则其输出为
->
-> find sd
->
-> 若不指定选项,即输入
->
-> ./test
->
-> 则输出为
->
-> no options found
->
-> 示例二
-> 下面的这个示例主要用来说明外部变量，参数默认值以及一个选项对应多个值的情况
-> 这段代码主要有四个选项：
->
-> –-apple ： 苹果的数量
-> –-orange：橘子的数量
-> –-address：水果的生产地，可指定多个生产地
-> –-help： 打印帮助信息
->
-> ///////////////////////////////////////////
-> //计算橘子和苹果的总数量，可以指定多个生产地    //
-> //编译选项加上 -lboost_program_options     //
-> ///////////////////////////////////////////
->
-> ```c++
-> # include <iostream>  
-> 
-> # include <vector>  
-> 
-> # include <string>  
-> 
-> # include <boost/program_options.hpp>  
-> 
-> namespace bpo = boost::program_options;  
-> 
-> int main(int argc, char const *argv[])  
-> {  
->     //外部变量，用于保存获取的参数值  
->     int apple_num = 0, orange_num = 0;  
->     std::vector<std::string> addr;  
->     bpo::options_description opt("all options");  
->     opt.add_options()  
->     //指定该参数的默认值 
->     // "apple,a" : 指定选项的全写形式为 --apple, 简写形式为 -a
->     //value<type>(ptr) : ptr为该选项对应的外部变量的地址, 当该选项被解析后, 
->     //可通过下面的notify()函数将选项的值赋给该外部变量,该变量的值会自动更新
->     //defaut_value(num) : num为该选项的默认值, 若命令行中未输入该选项, 则该选项的值取为num
->     ("apple,a", bpo::value<int>(&apple_num)->default_value(10), "苹果的数量")  
->     ("orange,o", bpo::value<int>(&orange_num)->default_value(20), "橘子的数量")  
->     //该参数的实际类型为vector,所以命令行中输入的值可以是多个,
->     //multitoken()的作用就是告诉编译器,该选项可接受多个值  
->     ("address", bpo::value<std::vector<std::string> >()->multitoken(), "生产地")  
->     ("help", "计算苹果和橘子的总数量");  
-> 
->     bpo::variables_map vm;  
-> 
->     try{  
->         bpo::store(parse_command_line(argc, argv, opt), vm);  
->     }  
->     catch(...){  
->         std::cout << "输入的参数中存在未定义的选项！\n";  
->         return 0;  
->     }  
->     //参数解析完成后，通知variables_map去更新所有的外部变量
->     //这句话执行后, 会使得apple_num和orange_num的值自动更新为选项指定的值   
->     bpo::notify(vm);  
-> 
->     if(vm.count("help") ){  
->         std::cout << opt << std::endl;  
->         return 0;  
->     }  
->     if(vm.count("address") ){  
->         std::cout << "生产地为：";  
->         //遍历选项值  
->         for(auto& str : vm["address"].as<std::vector<std::string> >() )  
->             std::cout << str << " ";  
->         std::cout << std::endl;   
->     }  
->     std::cout << "苹果的数量:" << apple_num << std::endl;  
->     std::cout << "橘子的数量:" << orange_num << std::endl;  
->     std::cout << "总数量数量:" << orange_num + apple_num << std::endl;  
->     return 0;  
-> }
-> ```
->
-> 输入
->
-> ./a.out –-help
->
-> 输出
->
-> all options:
-> -a [ –apple ] arg (=10) 苹果的数量
-> -o [ –orange ] arg (=20) 橘子的数量
-> –address arg 生产地
-> –help 计算苹果和橘子的总数量
->
-> 指定苹果和橘子的数量:
->
-> ./a.out –-apple=8 –-orange=20
->
-> 其输出为:
->
-> 苹果的数量:8
-> 橘子的数量:20
-> 总数量数量:28
->
-> 仅指定橘子的数量,不指定苹果的数量:
->
-> ./a.out –-orange=20
->
-> 其输出为:
->
-> 苹果的数量:10
-> 橘子的数量:20
-> 总数量数量:30
->
-> 可以看到,由于没有输入苹果的数量,所以输出的苹果的数量为我们指定的默认值
->
-> 指定一个生产地:
->
-> ./a.out –-apple=8 –-orange=20 –-address=山东
->
-> 输出:
->
-> 生产地为：山东
-> 苹果的数量:8
-> 橘子的数量:20
-> 总数量数量:28
->
-> 指定多个生产地:
->
-> ./a.out –-apple=8 –-orange=20 –-address=山东 陕西
->
-> 输出为
->
-> 生产地为：山东 陕西
-> 苹果的数量:8
-> 橘子的数量:20
-> 总数量数量:28
->
-> 简写形式的输入:
->
-> ./a.out -a 8 -o 20 –-address=山东
->
-> 输出:
->
-> 生产地为：山东
-> 苹果的数量:8
-> 橘子的数量:20
-> 总数量数量:28
->
+### 主程序edb
+
+#### Edb类
+
+```c
+class Edb
+{
+    public:
+        Edb() {};
+        ~Edb() {};
+    
+    public:
+        void start(void);
+    
+    protected:
+        void prompt(void);
+    
+    private:
+        void        split(const std::string &text, char delim, std::vector<std::string> &result);
+        char*       readLine(char *p, int length);
+        int         readInput(const char* pPrompt, int numIndent);
+    
+    private:
+        ossSocket       _sock;
+        CommandFactory  _cmdFactory;
+        char            _cmdBuffer[CMD_BUFFER_SIZE];
+};
+```
+
+公有成员函数：
+
+-   start() 启动客户端主程序
+-   prompt() 人机交互窗口，用于提示信息，并将命令输入机器
+
+私有成员函数：
+
+-   split() 解析一段字符串
+-   readLine() 读取用户输入的一行
+-   readInput() 读取用户输入，并进行处理
+
+私有成员变量：
+
+-   ossSocket _sock, 客户端socket对象，用于socket消息传递
+-   CommandFactory \_cmdFactory, 命令工厂类，对程序内置命令进行初始化，并存储到类的成员变量\_cmdMap中，\_cmdMap主要用来映射命令字符串与相应命令类
+-   char \_cmdBuffer[], 存储用户输入 
+
+#### start()启动
+
+```c
+void Edb::start(void)
+{
+    std::cout<< "Welcome to EmeraldDB shell!" << std::endl;
+    std::cout<< "edb help for help, Ctrl+c or quit to exit " << std::endl;
+    while(0==gQuit)
+    {
+        prompt();
+    }
+}
+```
+
+屏幕打印基本信息，进入循环。设置全局变量`int gQuit = 0;`当gQuit不变时客户端保持在人机交互窗口，用户输入退出命令时gQuit置1，程序结束。
+
+#### 读取输入信息
+
+**读取一行**
+
+```c
+char *Edb::readLine(char *p, int length)
+{
+    int len = 0;
+    char ch;
+    while((ch=getchar()) != NEW_LINE)
+    {
+        switch (ch)
+        {
+        case BACK_SLANT:
+            break;
+        default:
+            p[len] = ch;
+            len++;
+        }
+        continue;
+    }
+    len = strlen(p);
+    p[len] = 0;
+    return p;
+}
+```
+
+宏定义NEW_LINE -> '\n', BACK_SLANT -> '\\\\'. 读取标准输入，直到遇到换行符或者反斜杠(表示下文继续这一行)
+
+**读取用户输入的完整信息**
+
+```c
+int Edb::readInput(const char *pPrompt, int numIndent)
+{
+    memset(_cmdBuffer, 0, CMD_BUFFER_SIZE);
+    // print tab
+    for(int i=0; i<numIndent; ++i)
+    {
+        std::cout << TAB;
+    }
+    // print "edb>    "
+    std::cout << pPrompt << ">  ";
+    // read a line from cmd
+    readLine(_cmdBuffer, CMD_BUFFER_SIZE-1);
+    int curBufLen = strlen(_cmdBuffer);
+    // "\" means continue
+    while(_cmdBuffer[curBufLen-1] == BACK_SLANT
+        && (CMD_BUFFER_SIZE-curBufLen)>0)
+    {
+        for(int i=0; i<numIndent; ++i)
+        {
+            std::cout<< TAB;
+        }
+        std::cout<<"> ";
+        readLine(&_cmdBuffer[curBufLen-1], CMD_BUFFER_SIZE-curBufLen);
+    }
+    curBufLen = strlen(_cmdBuffer);
+    for(int i=0; i < curBufLen; ++i)
+    {
+        if(_cmdBuffer[i] == TAB)
+        {
+            _cmdBuffer[i]=SPACE;
+        }
+    }
+    return EDB_OK;
+}
+
+```
+
+与只读一行信息不同的是，读取完整的信息时readInput()函数对用户操作进行了界面美化，即每一步输出 ">",并且允许用户输入多行，使用反斜杠"\\"进行标记。首先读取第一行，若第一行行尾是"\\"则继续读取下一行。
+
+**命令解析 delim切割**
+
+```c
+void Edb::split(const std::string &text, char delim, std::vector<std::string> &result)
+{
+    size_t strLen = text.length();
+    size_t first = 0;
+    size_t pos = 0;
+    for(first = 0; first<strLen; first=pos+1)
+    {
+        pos = first;
+        while(text[pos]!=delim && pos<strLen)
+        {
+            pos++;
+        }
+        // truncate str
+        std::string str = text.substr(first, pos-first);
+        result.push_back(str);
+    }
+    return;
+}
+```
+
+对传入的字符串text以delim为单位进行切割，使用字符串的substr(start, len)函数切割，切割后的每个元素str保存在vector\<string\> 类型参数的result中.
+
+**prompt()交互窗口**
+
+```c
+void Edb::prompt(void)
+{
+    int ret = EDB_OK;
+    ret = readInput("edb", 0);
+    if(ret)
+    {
+        return;
+    }
+    // Input string
+    std::string textInput = _cmdBuffer;
+    // split the input sentence
+    std::vector<std::string> textVec;
+    split(textInput, SPACE, textVec);
+    int count = 0;
+    std::string cmd = "";
+    std::vector<std::string> optionVec;
+
+    std::vector<std::string>::iterator iter = textVec.begin();
+    // handle different command here.
+    ICommand * pCmd = NULL;
+    for(; iter!=textVec.end(); ++iter)
+    {
+        std::string str = *iter;
+        if(0==count)
+        {
+            cmd = str;
+            count ++;
+        }
+        else
+        {
+            optionVec.push_back(str);
+        }
+    }
+    pCmd = _cmdFactory.getCommandProcesser(cmd.c_str());
+    if(NULL!=pCmd)
+    {
+        pCmd->execute(_sock, optionVec);
+    }
+}
+```
+
+首先调用readInput()函数，并传入提示信息'edb', 接收用户输入到\_cmdBuffer存储空间,  这里拷贝\_cmdBuffer字符串到新的string对象textInput来进行命令切割,切割完的字符串保存到vector \<string\>对象textVec, 接下来遍历该vector，读取到cmd命令字符串；获取到命令代码后调用\_cmdFactory类的getCommandProcesser()方法，参数为命令代码字符串，该方法返回指向ICommand类的指针，方法内是遍历\_cmdMap, 一个map类型的容器，存储命令字符串与命令类的映射，每次遍历到的命令字符串存放到vector；vector存放的第一个元素是cmd命令字符串，传入客户端socket对象和optionVec执行命令，即调用ICommand类的子类的execute()方法。
+
+### 命令类
+
+#### Icommand 类
+
+ICommand作为基类，提供给几个命令类继承，重写execute()函数
+
+```c++
+class ICommand
+{
+    typedef int(*OnMsgBuild)(char ** ppBuffer, int * pBufferSize,   \
+                bson::BSONObj &obj);
+    public:
+        virtual int execute(ossSocket &sock, std::vector<std::string> &argVec);
+        int         getError(int code);
+    
+    protected:
+        int         recvReply(ossSocket &sock);
+        int         sendOrder(ossSocket &sock, OnMsgBuild onMsgBuild);
+        int         sendOrder(ossSocket &sock, int opCode);
+    
+    protected:
+        virtual int handleReply()   {return EDB_OK;}
+    
+    protected:
+        char _recvBuf[RECV_BUF_SIZE];
+        char _sendBuf[SEND_BUF_SIZE];
+        std::string _jsonString;
+};
+```
+
+ICommand类有两个公有函数 execute()和getError(), 前者基于建立的socket对象发送给服务端消息或执行本地化命令，后者是返回错误码。保护函数: recvReply() 接收服务端发来的数据，sendOrder() 发送命令到服务端程序。
+
+recvReply()函数
+
+```c++
+// receive a message that replyed
+int ICommand::recvReply(ossSocket &sock)
+{
+    // define message data length
+    int length = 0;
+    int ret = EDB_OK;
+    // fill receive buffer with 0.
+    memset(_recvBuf, 0, RECV_BUF_SIZE);
+    if(!sock.isConnected())
+    {
+        return getError(EDB_SOCK_NOT_CONNECT);
+    }
+    while(1)
+    {
+        // receive data from the server.first receive the length of the data
+        ret = sock.recv(_recvBuf, sizeof(int));
+        if(EDB_TIMEOUT == ret)
+        {
+            continue;
+        }
+        else if(EDB_NETWORK_CLOSE == ret)
+        {
+            return getError(EDB_SOCK_REMOTE_CLOSED);
+        }
+        else
+        {
+            break;
+        }
+    }
+    // get the value of length
+    length = *(int *)_recvBuf;
+    if(length > RECV_BUF_SIZE)
+    {
+        return getError(EDB_RECV_DATA_LENGTH_ERROR);
+    }
+
+    // receive data from the server.second receive the last data
+    while(1)
+    {
+        ret = sock.recv(&_recvBuf[sizeof(int)], length-sizeof(int));
+        if(ret == EDB_TIMEOUT)
+        {
+            continue;
+        }
+        else if(EDB_NETWORK_CLOSE == ret)
+        {
+            return getError(EDB_SOCK_REMOTE_CLOSED);
+        }
+        else
+        {
+            break;
+        }
+    }
+    return ret;
+} 
+```
+
+先接收数据的长度，再接收数据。接收方法使用ossSocket类的recv方法，健壮地读消息，返回错误码后调用getError()方法输出错误消息。
+
+**sendOrder() 发送命令**
+
+```c++
+int ICommand::sendOrder(ossSocket &sock, int opCode)
+{
+    int ret = EDB_OK;
+    memset(_sendBuf, 0, SEND_BUF_SIZE);
+    char * pSendBuf = _sendBuf;
+    const char *pStr = "hello world";
+    *(int *)pSendBuf = strlen(pStr) + 1 + sizeof(int);
+    memcpy(&pSendBuf[sizeof(int)], pStr, strlen(pStr)+1);
+    ret = sock.send(pSendBuf, *(int *)pSendBuf);
+}
+```
+
+测试使用，发送消息为helloworld，
+
+#### ConnectCommand 连接命令
+
+公有继承ICommand类，并重写execute() 函数. 连接命令是用来实现socket客户端与服务端的连接.
+
+std::string _address,存储 用户传入的ip地址，字符串格式。
+
+int _port，存储用户传入的port
+
+类的声明：
+
+```c++
+class ConnectCommand: public ICommand
+{
+    public:
+        int execute(ossSocket &sock, std::vector<std::string> &argVec);
+    
+    private:
+        std::string _address;
+        int         _port;
+};
+```
+
+类的实现：
+
+**execute()命令执行函数**
+
+传入的参数为ossSocket对象 sock/vector\<std::string\> argVec命令容器建立该socket的连接。socket建立连接执行ossSocket对象的几个命令：先close()关闭文件描述符对应的socket，再setAddress(add, port)设置socket监听的地址和端口，然后initSocket()初始化客户端socket并创建socket文件，初始化成功后调用连接函数connect()，本地的客户端socket文件就可以和服务端socket建立连接，最后设置disableNagle()函数，禁止小包打包成大包再发送。
+
+```c++
+/****************************Connect Command**********************************/
+int ConnectCommand::execute(ossSocket &sock, std::vector<std::string> &argVec)
+{
+    int ret = EDB_OK;
+    _address = argVec[0];
+    _port = atoi(argVec[1].c_str());
+    sock.close();
+    sock.setAddress(_address.c_str(), _port);
+    ret = sock.initSocket();
+    if(ret)
+    {
+        return getError(EDB_SOCK_INIT_FAILED);
+    }
+    ret = sock.connect();
+    if(ret)
+    {
+        return getError(EDB_SOCK_CONNECT_FAILED);
+    }
+    sock.disableNagle();
+    return ret;
+}
+
+```
+
+#### help命令
+
+用户输入help后屏幕输出提示信息
+
+```c++
+int HelpCommand::execute(ossSocket &sock, std::vector<std::string> &argVec)
+{
+    int ret = EDB_OK;
+    printf("List of classes of commands:\n\n");
+    printf("%s [server] [port]-- connecting emeralddb server\n", COMMAND_CONNECT);
+    printf("%s -- sending a insert command to emeralddb server\n", COMMAND_INSERT);
+    printf("%s -- sending a query command to emeralddb server\n", COMMAND_QUERY);
+    printf("%s -- sending a delete command to emeralddb server\n", COMMAND_DELETE);
+    printf("%s [number]-- sending a test command to emeralddb server\n", COMMAND_TEST);
+    printf("%s -- providing current number of record inserting\n", COMMAND_SNAPSHOT);
+    printf("%s -- quitting command\n\n", COMMAND_QUIT);
+    printf("Type \"help\" command for help\n");
+    return ret;
+}
+```
+
+#### quit命令
+
+离开客户端命令quit
+
+```c++
+/****************************Quit Command**********************************/
+int QuitCommand::handleReply()
+{
+    int ret = EDB_OK;
+    // gQuit = 1;
+    return ret;
+}
+
+int QuitCommand::execute(ossSocket &sock, std::vector<std::string> &argVec)
+{
+    int ret = EDB_OK;
+    if(!sock.isConnected())
+    {
+        return getError(EDB_SOCK_NOT_CONNECT);
+    }
+    ret = sendOrder(sock, 0);
+    // sock.close();
+    ret = handleReply();
+    return ret;
+}
+
+```
+
+
+
+### CommandFactory 类
+
+该类将各种基于ICommand类派生的命令类，如ConnectCommand类，将该类与命令字符串映射，并存储到容器 std::map\<std::string, ICommand*\>  \_cmdMap 中。CommandFactory类有一个公有函数getCommandProcesser()，该函数传入命令字符串，遍历上述\_cmdMap找到命令类，并返回指针。
+
+类的定义
+
+```c++
+#define COMMAND_BEGIN void CommandFactory::addCommand() {
+#define COMMAND_END }
+#define COMMAND_ADD(cmdName,cmdClass) {                         \
+   ICommand* pObj = new cmdClass();                             \
+   std::string str = cmdName;                                   \
+   _cmdMap.insert(COMMAND_MAP::value_type(str,pObj));           \
+   } 
+
+class CommandFactory
+{
+    typedef std::map<std::string, ICommand*> COMMAND_MAP;
+    public:
+        CommandFactory();
+        ~CommandFactory(){}
+        void addCommand();
+        ICommand * getCommandProcesser(const char * pcmd);
+    private:
+        COMMAND_MAP _cmdMap;
+};
+```
+
+getCommandProcesser()
+
+```c++
+ICommand *CommandFactory::getCommandProcesser(const char* pcmd)
+{
+    ICommand * pProcessor = NULL;
+    do{
+        COMMAND_MAP::iterator iter;
+        iter = _cmdMap.find(pcmd);
+        if(iter != _cmdMap.end())
+        {
+            pProcessor = iter->second;
+        }
+    }while(0);
+    return pProcessor;
+}
+```
+
+利用宏定义来格式化命令类
+
+```
+
+COMMAND_BEGIN   
+COMMAND_ADD(COMMAND_CONNECT,ConnectCommand)
+COMMAND_ADD(COMMAND_QUIT,QuitCommand)
+COMMAND_ADD(COMMAND_HELP,HelpCommand)
+COMMAND_END
+```
+
+这里不再推荐这种方式 太难读了，也不好调试。
+
+## 核调度设计
+
+### KRCB
+
+对于emeralddb数据库系统，应该有一个主模块用于管理数据库当前状态，以及诸如数据库文件存储位置、日志文件存储位置等系统基本配置，以及获取配置的方法。
+
+#### 核状态
+
+数据库的状态如下表，不同状态应有不同的操作方法
+
+| 状态名   | 变量名          | 代码 |
+| -------- | --------------- | ---- |
+| 正常状态 | EDB_DB_NORMAL   | 0    |
+| 关机状态 | EDB_DB_SHUTDOWN | 1    |
+| 病态     | EDB_DB_PANIC    | 2    |
+
+#### 类 EDB_KRCB
+
+class EDB_KRCB, 
+
+成员变量：
+
+```c++
+char            _dataFilePath[OSS_MAX_PATHSIZE+1];	// 数据存储文件
+char            _logFilePath[OSS_MAX_PATHSIZE+1];	// 日志文件
+int             _maxPool;							// 线程池大小
+char            _svcName[NI_MAXSERV+1];				// 服务端名称
+EDB_DB_STATUS   _dbStatus;							// 数据库状态
+pmdEDUMgr       _eduMgr;							// EDU线程管理单元
+```
+
+类的构造函数，char 数组全部设置为0，_dbStatus设置为EDB_DB_NORMAL，int 类型变量设置为0。
+
+成员函数：
+
+```c++
+// get edumgr
+inline pmdEDUMgr *getEDUMgr()
+{
+    return &_eduMgr;
+} 
+
+// get database status
+inline EDB_DB_STATUS getDBStatus()
+{
+    return _dbStatus;
+}
+// setup database status
+inline void setDBStatus(EDB_DB_STATUS status)
+{
+	_dbStatus = status;
+}
+```
+
+类似的有：`const char *getDataFilePath()`，`const char *getLogFilePath()`，`const char *getSvcName()`, `int getMaxPool()`, `setDBStatus(EDB_DB_STATUS status)`, `setDataFilePath(const char *pPath)`, `setLogFilePath(const char *pPath)`,。
+
+并设置全局的函数：
+
+```C++
+inline EDB_KRCB *pmdGetKRCB()
+{
+    return &pmd_krcb;
+}
+```
+
+用于获取内核控制块KRCB。
+
+#### 类初始化
+
+内核控制块有一个
+
+```C++
+// setup from pmdOptions
+int init(pmdOptions *options);
+```
+
+初始化函数
+
+```c++
+int EDB_KRCB::init(pmdOptions *options)
+{
+    setDBStatus(EDB_DB_NORMAL);
+    setDataFilePath(options->getDBPath());
+    setLogFilePath(options->getLogPath());
+    strncpy(_pdDiagLogPath, getLogFilePath(), sizeof(_pdDiagLogPath));
+    setSvcName(options->getServiceName());
+    setMaxPool(options->getMaxPool());
+    return EDB_OK;
+}
+```
+
+内核控制块初始化时，读取命令行或者配置文件的配置参数，例如DBpath，LogPath等。
+
+### EDU 线程单元
+
+数据库维护一个线程池，线程池内的每个线程称为EDU，每个线程由一个EDUMgr进行管理(创建、销毁、回调线程池等操作)。多线程的作用是在同一时间提供给多个客户端多路访问数据库，
+
+```c++
+enum EDU_STATUS
+{
+    PMD_EDU_CREATING = 0,
+    PMD_EDU_RUNNING,
+    PMD_EDU_WAITING,
+    PMD_EDU_IDLE,
+    PMD_EDU_DESTROY,
+    PMD_EDU_UNKNOWN,
+    PMD_EDU_STATUS_MAXIMUM = PMD_EDU_UNKNOWN
+};
+```
+
+EDU状态表
+
+| 状态(EDU_STATUS) | 说明             |
+| ---------------- | ---------------- |
+| PMD_EDU_CREATING | 线程正在创建     |
+| PMD_EDU_RUNNING  | 线程正在运行     |
+| PMD_EDU_WAITING  | 等待调用         |
+| PMD_EDU_IDLE     | 线程回调入线程池 |
+| PMD_EDU_DESTROY  | 销毁             |
+| PMD_EDU_UNKNOWN  | 未知             |
+
+对于UNIX下系统线程操作，使用boost提供的thread类。
+
+EDU种类：
+
+| 类型(EDU_TYPES)      | 说明         |
+| -------------------- | ------------ |
+| EDU_TYPE_TCPLISTENER | TCP通信线程  |
+| EDU_TYPE_AGENT       | 主程代理分发 |
+| EDU_TYPE_UNKNOWN     | 未知         |
+
+
+
+### EDUCB 线程单元控制块
+
+EDU作为线程操作的封装，不但具有一个核控制的ID，同时拥有一个控制块CB(pmdEDUCB类)来进行线程控制。
+
+CB的私有成员：
+
+```C++
+private:
+        EDUID           _id;	// 创建的EDU id
+        EDU_TYPES       _type;	// EDU 类型
+        EDU_STATUS      _status;  // EDU 状态
+        pmdEDUMgr       *_mgr;		// 内核manager，用于内核调度该EDU
+        bool            _isForced;	// 是否强制停止
+        bool            _isDisconnected;	// 失去连接
+        ossQueue<pmdEDUEvent>   _queue;		// 该EDU拥有一个事件队列，处理内核分发的事务
+```
+
+CB的构造函数，首先要获取内核创建的线程manager—pmdEDUMgr, 再传入要创建的EDU类型— EDU_TYPES。
+
+```cpp
+pmdEDUCB::pmdEDUCB ( pmdEDUMgr *mgr, EDU_TYPES type ):
+    _type(type),
+    _mgr(mgr),
+    _status(PMD_EDU_CREATING),
+    _id(0),
+    _isForced(false),
+    _isDisconnected(false)
+{
+}
+```
+
+内联函数：
+
+getID(), 获取该CB控制块控制的EDU的ID。
+
+postEvent(), 将要处理的EDUEvent post到CB的私有成员变量_queue队列（存储待处理任务）。
+
+waitEvent(), 在\_queue队列中获取一个待处理任务，注意到这里的wait，就是当_queue队列为空时。waitEvent()函数传入一个millsec作为事件post等待时间。CB执行waitEvent()方法时，EDU状态应该设置为WAITTING或者本身处于IDLE。当传入的millsec参数不合法(小于0)，队列\_queue 使用wait_and_pop()方法pop出一个Event，即等待队列不空时pop；当传入的参数合法，队列\_queue执行time\_wait\_and_pop() 方法pop Event。
+
+其他的get/set系列函数顾名思义。
+
+```C++
+// 控制块
+class pmdEDUCB
+{
+    public:
+        pmdEDUCB(pmdEDUMgr *mgr, EDU_TYPES type);
+        
+        inline EDUID getID()
+        {
+            return _id;
+        }
+        inline void postEvent(pmdEDUEvent const &data)
+        {
+            _queue.push(data);
+        }
+
+        bool waitEvent(pmdEDUEvent &data, long long millsec)
+        {
+            // if millsec is not 0, that means we want timeout
+            bool waitMsg = false;
+            if(PMD_EDU_IDLE != _status)
+            {
+                _status = PMD_EDU_WAITING;
+            }
+            if(0>millsec)
+            {
+                _queue.wait_and_pop(data);
+                waitMsg = true;
+            }
+            else
+            {
+                waitMsg = _queue.time_wait_and_pop(data, millsec);
+            }
+            if(waitMsg)
+            {
+                if(data._eventType == PMD_EDU_EVENT_TERM)
+                {
+                    _isDisconnected = true;
+                }
+                else
+                {
+                    _status = PMD_EDU_RUNNING;
+                }
+            }
+            return waitMsg;
+        }
+        inline void force()
+        {
+            _isForced = true;
+        }
+        inline void disconnect()
+        {
+            _isDisconnected = true;
+        }
+        inline EDU_TYPES getType()
+        {
+            return _type;
+        }
+        inline EDU_STATUS getStatus()
+        {
+            return _status;
+        }
+        inline void setType(EDU_TYPES type)
+        {
+            _type = type;
+        }
+        inline void setID(EDUID id)
+        {
+            _id = id;
+        }
+        inline void setStatus(EDU_STATUS status)
+        {
+            _status = status;
+        }
+        inline bool isForced()
+        {
+            return _isForced;
+        }
+        inline pmdEDUMgr *getEDUMgr()
+        {
+            return _mgr;
+        }
+    
+    private:
+        EDUID           _id;
+        EDU_TYPES       _type;
+        EDU_STATUS      _status;
+        pmdEDUMgr       *_mgr;
+        bool            _isForced;
+        bool            _isDisconnected;
+        ossQueue<pmdEDUEvent>   _queue;
+};
+```
+
+### EDUMgr 线程单元管理
+
+线程的所有操作由控制块CB完成，给控制块下达指令的则是核内唯一的管理线程EDUMgr，它维护一个线程池，线程池分为\_runQueue(正在运行的线程队列)和\_idleQueue(等待运行的线程队列)。EDUMgr可以获取线程池的状态信息，例如EDU队列大小、系统EDU、创建EDU、销毁EDU、激活EDU等。
+
+#### 类的成员变量
+
+```c++
+private:
+        std::map<EDUID, pmdEDUCB *> _runQueue;
+        std::map<EDUID, pmdEDUCB *> _idleQueue;
+        std::map<unsigned int, EDUID> _tid_eduid_map;
+
+        ossSLatch _mutex;
+        // increamental-only EDU id
+        // 64 bit is big enough for most
+        EDUID _EDUID;
+        // list of system EDUS
+        std::map<EDU_TYPES, EDUID> _mapSystemEDUS;
+        // no new requests are allowed
+        bool _isQuiesced;
+        bool _isDestroyed;
+
+```
+
+`std::map<EDUID, pmdEDUCB *> _runQueue`, 这是EDUMgr类的成员设计的一个map容器，用于存储处于RUNNING状态的EDU，映射关系为线程单元ID到线程单元控制块的指针。
+
+`std::map<EDUID, pmdEDUCB *> _idleQueue`，功能与\_runQueue区别在于存储处于IDLE状态的EDU。
+
+`std::map<unsigned int, EDUID> _tid_eduid_map`, 线程池的EDU在创建时会被系统分配一个`thread_id`, 设计一个map容器用于存储tid与EDUID的映射关系，方便系统使用tid找到EDB系统中对应的EDUID。
+
+`ossSLatch _mutex`，多线程的程序开发中，对于临界资源的访问要保证读取数据的干净，所以在读数据时加锁。
+
+`EDUID _EDUID`, 线程单元管理员Mgr维护一个递增的`_EDUID`,新建的EDU使用这个`_EDUID` 。
+
+` std::map<EDU_TYPES, EDUID> _mapSystemEDUS`, 在EDB系统中有些EDU线程单元是要为系统运行服务的，将其定义为SystemEDUS，映射关系为EDU类型到线程单元ID。
+
+`bool _isQuiesced`, 布尔变量表示系统是否暂停。
+
+`bool _isDestroyed`, 布尔变量表示EDUMgr是否销毁。
+
+#### 类的成员方法
+
+`size():unsigned int`, 获取线程池大小。
+
+线程管理单元类内的线程池作为公共资源被客户端的线程访问，需要使用共享锁(用于读数据多)`ossSLatch _mutex`。读取完数据后释放锁。
+
+```cpp
+unsigned int size()
+{
+    unsigned int num = 0;
+    _mutex.get_shared();    // 拿到共享锁
+    num = (unsigned int)_runQueue.size() + 
+        (unsigned int)_idleQueue.size();
+    _mutex.release_shared();
+    return num;
+}
+```
+
+与`size()`方法类似的方法还有：`sizeRun()`, `sizeIdle()`, `sizeSystem()`.
+
+##### EDU线程执行方法入口
+
+新建的EDU线程单元对应一个需要执行的任务函数，需要把这个函数入口提供给EDU。
+
+获取指定TYPE类型的方法：
+
+在EDB系统中，将EDU分为不同的TYPE，每种TYPE执行的任务函数不同。
+
+本系统中设计一个数据结构`_eduEntryInfo`, 结构体内有三个成员：EDU类型 type，EDU注册结构 regResult， EDU的入口函数 entryFunc。静态常量entry[]里保存不同TYPE的`_eduEntryInfo`, 在外部调用`getEntryFuncByType()`时就可以根据传入的type参数来获取对应的入口函数。
+
+这里返回的是函数指针，为了表示方便以及便于阅读，重新定义类型 `pmdEntryPoint`
+
+```cpp
+// 函数指针
+typedef int (*pmdEntryPoint) (pmdEDUCB*, void *);
+
+struct _eduEntryInfo
+{
+   EDU_TYPES     type ;
+   int           regResult ;
+   pmdEntryPoint entryFunc ;
+};
+
+#define ON_EDUTYPE_TO_ENTRY1(type, system, entry, desp) \
+    {type, registerEDUName(type, desp, system), entry}
+
+pmdEntryPoint getEntryFuncByType(EDU_TYPES type)
+{
+    pmdEntryPoint rt = NULL;
+    static const _eduEntryInfo entry[] = {
+        ON_EDUTYPE_TO_ENTRY1(EDU_TYPE_AGENT, false,
+                            pmdAgentEntryPoint,
+                            "Agent"),
+        ON_EDUTYPE_TO_ENTRY1(EDU_TYPE_TCPLISTENER, true,
+                            pmdTcpListenerEntryPoint,
+                            "TCPListener"),
+        ON_EDUTYPE_TO_ENTRY1(EDU_TYPE_MAXIMUM, false,
+                            NULL,
+                            "Unkown")
+    };
+
+    static const unsigned int number = sizeof(entry)/sizeof(_eduEntryInfo);
+
+    unsigned int index = 0;
+    for(;index < number; ++index)
+    {
+        if(entry[index].type == type)
+        {
+            rt = entry[index].entryFunc;
+            goto done;
+        }
+    }
+
+done:
+    return rt;
+error:
+    goto done;
+}
+```
+
+线程执行函数入口设计：
+
+布尔变量`eduDestroyed`表示当前线程单元EDU是否还在执行过程中，整个入口函数就是在死循环中进行，死循环结束的标志则是当前EDU是否要被销毁。
+
+利用当前EDU的控制块来接收外部发送的事件，控制块内有一个事件队列，控制块的waitEvent()函数就是一直等待事件队列能够pop出一个事件来进行处理。
+
+在EDU执行过程中遇到控制块的isForced()函数后，表示外部强行终止该EDU。
+
+接收到事件后判断事件类型:
+
+RESUME: 表示线程重新被启用。设置当前EDU处于暂停状态(调用waitEDU函数)，根据线程单元控制块CB的EDU_TYPE获取EDU的执行入口函数，如果没有得到入口函数，系统down。
+
+TERM：表示结束EDU，置isForced为true。
+
+执行入口函数，并传入参数CB和事件Event对应的数据`_Data`.
+
+继续等待下一个事件Event。
+
+若接收到事件内参数`_release`为true，表示释放数据内存空间。
+
+```cpp
+int pmdEDUEntryPoint(EDU_TYPES type, pmdEDUCB *cb, void *arg)
+{
+    int rc = EDB_OK;
+    EDUID eduID = cb->getID();
+    pmdEDUMgr *eduMgr = cb->getEDUMgr();
+    pmdEDUEvent event;
+    bool eduDestroyed = false;
+    bool isForced = false;
+    // main loop
+    while(!eduDestroyed)
+    {
+        type = cb->getType();
+        // wait for 1000 milliseconds for events
+        if(!cb->waitEvent(event, 1000))
+        {
+            if(cb->isForced())
+            {
+                PD_LOG(PDEVENT, "EDU %lld is forced", eduID);
+                isForced = true;
+            }
+            else
+            {
+                continue;
+            }
+        }
+        if(!isForced && PMD_EDU_EVENT_RESUME == event._eventType)
+        {
+            // set EDU status to wait
+            eduMgr->waitEDU(eduID);
+            // run the main function
+            pmdEntryPoint entryFunc = getEntryFuncByType(type);
+            if(!entryFunc)
+            {
+                PD_LOG(PDERROR, "EDU %lld type %d entry point func is NULL",
+                    eduID, type);
+                EDB_SHUTDOWN_DB
+                rc = EDB_SYS;
+            }
+            else
+            {
+                rc = entryFunc(cb, event._Data);
+            }
+            // sanity check
+            if(EDB_IS_DB_UP)
+            {
+                // system EDU should never exit when db is still runnig
+                if(isSystemEDU(cb->getType()))
+                {
+                    PD_LOG(PDSEVERE, "System EDU: %lld, type %s, exits with %d",
+                            eduID, getEDUName(type), rc);
+                    EDB_SHUTDOWN_DB
+                }
+                else if(rc)
+                {
+                    PD_LOG(PDWARNING, "EDU %lld, type %s, exits with %d",
+                            eduID, getEDUName(type), rc);
+                }
+            }
+            eduMgr->waitEDU(eduID);
+        }
+        else if(!isForced && PMD_EDU_EVENT_TERM != event._eventType)
+        {
+            PD_LOG(PDERROR, "Receive the wrong event %d in EDU %lld, type %s",
+                    event._eventType, eduID, getEDUName(type));
+            rc = EDB_SYS;
+        }
+        else if(isForced && PMD_EDU_EVENT_TERM == event._eventType)
+        {
+            PD_LOG(PDEVENT, "EDU %lld, type %s is forced", eduID, type);
+            isForced = true;
+        }
+        // release the event data
+        if(!isForced && event._Data && event._release)
+        {
+            free(event._Data);
+            event.reset();
+        }
+        rc = eduMgr->returnEDU(eduID, isForced, &eduDestroyed);
+        if(rc)
+        {
+            PD_LOG(PDERROR, "Invalid EDU status for EDU: %lld, type %s",
+                    eduID, getEDUName(type));
+        }
+        PD_LOG(PDDEBUG, "Terminating threads for EDU: %lld, type %s",
+                    eduID, getEDUName(type));
+    }
+return 0;
+}
+```
+
+
+
+##### 创建新线程EDU
+
+创建线程属于管理者EDU的私有成员方法，传入参数为线程类型、缺省参数、生成的EDU的id指针。
+
+首先要判断当前系统是否暂停，暂停状态下直接停止操作。
+
+判断能否根据type能够获取到线程单元入口函数。
+
+创建EDU的控制块CB, `new pmdEDUCB ( this, type ) `.
+
+利用控制块CB设置当前正在创建的EDU状态为CREATING。
+
+pmdEDUMgr维护着一个自递增的`_EDUID`，最新的`_EDUID`是没有被分配EDU的，要检查`_runQueue`和`_idleQueue`两个线程队列是否占用了这个`_EDUID`.
+
+`_EDUID`检查完毕后，给控制核CB分配EDU的ID，即调用CB的`setID()`方法。并将该EDU保存到`_runQueue`线程队列，意味着EDU开始运行。上述两个步骤读取并修改了线程队列，所以在前后应该申请锁并释放锁。
+
+使用`boost::thread`创建新的线程，传入的参数有线程执行函数`pmdEDUEntryPoint`以及执行函数的参数；若在这一过程中出错，则删除`_runQueue`队列中登记的id。
+
+最后postEvent(RESUME)表示启动上述创建的线程执行任务。
+
+```cpp
+int pmdEDUMgr::_createNewEDU ( EDU_TYPES type, void* arg, EDUID *eduid )
+{
+   int rc               = EDB_OK ;
+   unsigned int probe   = 0 ;
+   pmdEDUCB *cb         = NULL ;
+   EDUID myEDUID        = 0 ;
+   if ( isQuiesced () )
+   {
+      rc = EDB_QUIESCED ;
+      goto done ;
+   }
+
+   if ( !getEntryFuncByType ( type ) )
+   {
+      PD_LOG ( PDERROR, "The edu[type:%d] not exist or function is null", type ) ;
+      rc = EDB_INVALIDARG ;
+      probe = 30 ;
+      goto error ;
+   }
+   // 在内存不足时，new (std::nothrow)并不抛出异常，而是将指针置NULL。 
+   cb = new(std::nothrow) pmdEDUCB ( this, type ) ;
+   EDB_VALIDATE_GOTOERROR ( cb, EDB_OOM,
+            "Out of memory to create agent control block" )
+   // set to creating status
+   cb->setStatus ( PMD_EDU_CREATING ) ;
+
+   /***********CRITICAL SECTION*********************/
+   _mutex.get () ;
+   // if the EDU exist in runqueue
+   if ( _runQueue.end() != _runQueue.find ( _EDUID )  )
+   {
+      _mutex.release () ;
+      rc = EDB_SYS ;
+      probe = 10 ;
+      goto error ;
+   }
+   // if the EDU exist in idle queue
+   if ( _idleQueue.end() != _idleQueue.find ( _EDUID )  )
+   {
+      _mutex.release () ;
+      rc = EDB_SYS ;
+      probe = 15 ;
+      goto error ;
+   }
+   // assign EDU id and increment global EDUID
+   cb->setID ( _EDUID ) ;
+   if ( eduid )
+      *eduid = _EDUID ;
+   // place cb into runqueue
+   _runQueue [ _EDUID ] = ( pmdEDUCB* ) cb ;
+   myEDUID = _EDUID ;
+   ++_EDUID ;
+   _mutex.release () ;
+   /***********END CRITICAL SECTION****************/
+
+   // create a new thread here, pass agent CB and other arguments
+   try
+   {
+      boost::thread agentThread ( pmdEDUEntryPoint,
+                                  type, cb, arg ) ;
+      // detach the agent so that he's all on his own
+      // we only track based on CB
+      agentThread.detach () ;
+   }
+   catch ( std::exception e )
+   {
+      // if we failed to create thread, make sure to clean runqueue
+      _runQueue.erase ( myEDUID ) ;
+      rc = EDB_SYS ;
+      probe = 20 ;
+      goto error ;
+   }
+
+   //The edu is create, need post a resum event
+   cb->postEvent( pmdEDUEvent( PMD_EDU_EVENT_RESUME, false, arg ) ) ;
+
+done :
+   return rc ;
+error :
+   // clean out memory if it's allocated
+   if ( cb )
+      delete cb ;
+   PD_LOG ( PDERROR, "Failed to create new agent, probe = %d", probe ) ;
+   goto done ;
+}
+```
+
+##### 启动新线程EDU
+
+启动指定EDU类型(`EDU_TYPE`)的一个新线程EDU单元。并返回线程ID
+
+由于要访问线程队列，所以获取锁。首先判断线程池是否存在空闲的线程，即`_idleQueue`队列中是否存在怠性线程，若存在则获取线程ID以及线程控制块CB，并把移除`_idleQueue`队列，根据传入的参数type设置新建的线程类型，设置新建的线程状态为WAITING，注册到`_runQueue`队列，释放锁，最后发送事件RESUME，表示线程启动；若线程池不存在空闲的线程，释放锁，调用私有函数`_createNewEDU()`，从系统新建一个EDU。
+
+```
+// get an EDU from idle pool, if idle is empty, create new one
+int pmdEDUMgr::startEDU(EDU_TYPES type, void *arg, EDUID *eduid)
+{
+    int rc = EDB_OK;
+    EDUID eduID = 0;
+    pmdEDUCB * eduCB = NULL;
+    std::map<EDUID, pmdEDUCB *>::iterator it;
+    if(isQuiesced())
+    {
+        rc = EDB_QUIESCED;
+        goto done;
+    }
+    // get exclusive latch, we don't latch the entire function,
+    // in order to avoid creating new thread while holding latch
+    _mutex.get();
+    // if there is any pooled EDU?
+    // or is the request type can be pooled
+    // 判断是不是可以从线程池拿
+    if(true == _idleQueue.empty() || !isPoolable(type))
+    {
+        // note that EDU types other than "agent" shouldn't be pooled at all
+        // release latch before calling creat NEW EDU;
+        _mutex.release();
+        rc = _createNewEDU(type, arg, eduid);
+        if(EDB_OK == rc)
+            goto done;
+        goto error;
+    }
+
+    // if we can find something in idle queue, let's get the first of it
+    for(it = _idleQueue.begin();
+            (_idleQueue.end() != it) && 
+            (PMD_EDU_IDLE != (*it).second->getStatus());
+                ++it)
+        ;
+    //  if everything in idleQueue are in DESTROY status, we still need to create
+    // a new EDU
+    if(_idleQueue.end() == it)
+    {
+        // create a new
+        // release latch before calling createNewEDU
+        _mutex.release();
+        rc = _createNewEDU(type, arg, eduid);
+        if(EDB_OK == rc)
+            goto done;
+        goto error;
+    }
+
+    // now "it" is pointing to an idle EDU
+    // note that all EDUs in the idleQueue should be AGENT type
+    eduID = (*it).first;
+    eduCB = (*it).second;
+    _idleQueue.erase(eduID);
+    EDB_ASSERT(isPoolable(type), "must be agent.");
+
+    // switch agent type for the EDU(call different agent entry point)
+    eduCB->setType(type);
+    eduCB->setStatus(PMD_EDU_WAITING);
+    _runQueue[eduID] = eduCB;
+    *eduid = eduID;
+    _mutex.release();
+    // the EDU start, need post a resume event
+    eduCB->postEvent(pmdEDUEvent(PMD_EDU_EVENT_RESUME, false, arg));
+
+done:
+    return rc;
+error:
+    goto done;
+}
+```
+
+##### 暂停线程EDU
+
+##### 销毁线程EDU
+
+
+
+## 服务端监听程序
+
+作为服务端监听程序，提供给客户端建立连接的socket通信服务。
+
+设置一个宏：`PMD_TCPLISTENER_RETRY` 作为程序重启最大次数，启动过程中可能遇到的问题有：socket连接超时和代理线程启动失败。
+
+由主程序核KRCB获取连接参数：svcname，port。
+
+根据port创建ossSocket对象，服务端创建的socket不必提供主机地址，只需提供port。随后初始化ossSocket对象，并将其处于绑定监听状态，等待客户端socket接入。
+
+激活监听程序的线程，即调用控制块CB的activateEDU()函数，使线程EDU处于RUNNING状态。
+
+在数据库运行过程中保持执行：
+
+服务端socket执行accept()函数，并传入描述符s以记录该函数新生成的socket描述符。
+
+若接收过程中返回EDB_TIMEOUT错误，重新开始。
+
+若数据库已停止运行，停掉程序，goto  done。
+
+启动Agent代理线程，处理客户端发送来的命令，并返回data。
+
+上述过程中出错后记录日志，并及时关闭新生成的socket。
+
+```cpp
+int pmdTcpListenerEntryPoint(pmdEDUCB *cb, void *arg)
+{
+    int rc                  = EDB_OK;
+    pmdEDUMgr * eduMgr      = cb->getEDUMgr();
+    EDUID eduID             = cb->getID();
+    unsigned int retry      = 0;
+    EDUID agentEDU          = PMD_INVALID_EDUID;
+    char                    svcName[OSS_MAX_SERVICENAME + 1];
+
+    while(retry <= PMD_TCPLISTENER_RETRY && !EDB_IS_DB_DOWN)
+    {
+        retry++;
+
+        strcpy(svcName, pmdGetKRCB()->getSvcName() );
+        PD_LOG(PDEVENT, "Listening on port_test: %s\n", svcName);
+
+        int port = 0;
+        int len = strlen(svcName);
+        for (int i = 0; i < len; ++i)
+        {
+            if(svcName[i] >= '0' && svcName[i] <= '9')
+            {
+                port = port*10;
+                port += int(svcName[i]-'0');
+            }
+            else
+            {
+                PD_LOG(PDERROR, "service name error!");
+            }
+        }
+
+        ossSocket sock(port);
+        rc = sock.initSocket();
+        EDB_VALIDATE_GOTOERROR(EDB_OK==rc, rc, "Failed initialize socket");
+
+        rc = sock.bind_listen();
+        EDB_VALIDATE_GOTOERROR(EDB_OK==rc, rc, "Failed to bind_listen socket");
+
+        // once bind is successful, set the state of EDU to RUNNING
+        if(EDB_OK != (rc = eduMgr->activateEDU(eduID)) )
+        {
+            goto error;
+        }
+        // master loop for tcp listener
+        while(!EDB_IS_DB_DOWN)
+        {
+            int s;
+            // accept() default timeout=10ms, 
+            rc = sock.accept(&s, NULL, NULL);
+            // get nothing for a period of time, loop
+            if(EDB_TIMEOUT == rc)
+            {
+                rc = EDB_OK;
+                continue;
+            }
+            // receive error due to database down
+            if(rc && EDB_IS_DB_DOWN)
+            {
+                rc = EDB_OK;
+                goto done;
+            }
+            else if(rc)
+            {
+                // error, restart socket
+                PD_LOG(PDERROR, "Failed to accept socket in TCP listener");
+                PD_LOG(PDEVENT, "Restarting socket to listen");
+                break;
+            }
+
+            void *pData = NULL;
+            *((int *) &pData) = s;
+
+            // 启动代理线程 用于处理客户端发送的请求
+            rc = eduMgr->startEDU(EDU_TYPE_AGENT, pData, &agentEDU);
+            if(rc)
+            {
+                if(rc == EDB_QUIESCED)
+                {
+                    // we cannot start EDU due to quiesced
+                    PD_LOG(PDWARNING, "reject new connection due to quiesced database");
+
+                }
+                else
+                {
+                    PD_LOG(PDERROR, "Failed to start EDU agent");
+                }
+                // close remote connection if we cannot create new thread
+                ossSocket newsock(&s);
+                newsock.close();
+                continue;
+            }
+        }
+        if(EDB_OK != (rc = eduMgr->waitEDU(eduID)) )
+        {
+            goto error;
+        }
+    }   // while(retry <= PMD_TCPLISTENER_RETRY)
+
+done:
+    return rc;
+error:
+    switch(rc)
+    {
+        case EDB_SYS:
+            PD_LOG(PDSEVERE, "System error occured");
+            break;
+        default:
+            PD_LOG(PDSEVERE, "Internal error");
+    }
+    goto done;
+}
+```
+
+## 代理程序处理命令
+
+客户端发送到服务端的消息是按照本系统设定的协议格式化的，socket在接收到消息后，系统申请一块缓冲区存放接收到的数据内容，有代理程序处理这些内容，一是识别命令并调用对应命令的函数方法以执行，二是将发送的命令按照协议写入缓冲区返回replyData。
+
+代理程序依然使用EDU单元控制，入口函数为pmdAgentEntryPoint()。
+
+首先申请一块char类型，大小为receiveBufferSize（EDB系统宏定义为4096bytes）的内存空间，用于存储接收到的数据内容，其指针为pReceiveBuffer；再申请一块char类型，大小为resultBufferSize (EDB系统宏定义为一个消息包数据结构MsgReply占用的字节数)的内存空间，用于存储将要返回给客户端的数据内容。申请存储空间失败报EDB_OOM内存溢出的错误。
+
+设置一个标记disconnect，表示程序是否遇到终止命令。在未终止期间，执行：
+
+服务端接收消息：先接收数据长度，再接收数据内容。
+
+判断是否系统终止该程序，若是则退出；否则接收数据长度。
+
+执行socket对象的recv()函数，并传入消息缓冲区指针，即pReceiveBuffer，用于存储消息内容。
+
+接收到数据长度后判断是否合法以及申请的receiveBufferSize是否足够，不足则重新申请足够大小的内存空间，并赋予指针pReceiveBuffer，最后修改新申请空间的前int位表示的数据包长度。
+
+接收数据内容，并激活该代理程序的线程状态activateEDU()。
+
+调用代理线程的处理函数pmdProcessAgentRequest，处理接收到的命令。
+
+若处理完消息后discount标记为false，发送缓冲区待发送的返回消息，并从头开始执行本函数；否则退出，出错后报错。
+
+处理消息的函数pmdProcessAgentRequest（）：
+
+接收的参数：
+
+```cpp
+char *pReceiveBuffer,	// 接收到数据后存储消息的内存空间指针
+int packetSize,			// 接收到的数据字节长度
+char **ppResultBuffer,	// 指向一个指向结果存储空间的指针的指针
+int *pResultBufferSize, // 存储空间大小的指针
+bool *disconnect,		// 是否断开代理程序线程的标记
+pmdEDUCB *cb			// 代理程序控制块
+```
+
+
+
+```cpp
+int pmdRecv(char *pBuffer, int recvSize, ossSocket *sock, pmdEDUCB *cb)
+{
+    int rc = EDB_OK;
+    EDB_ASSERT(sock, "Soket is NULL");
+    EDB_ASSERT(cb, "cb is NULL");
+    while(true)
+    {
+        if(cb -> isForced())
+        {
+            rc = EDB_APP_FORCED;
+            goto done;
+        }
+        rc = sock->recv(pBuffer, recvSize);
+        if(EDB_TIMEOUT == rc)
+        {
+            continue;
+        }
+        goto done;
+    }
+done:
+    return rc;
+error:
+    goto done;
+}
+```
 
 
 
