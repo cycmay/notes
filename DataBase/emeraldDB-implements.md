@@ -1,123 +1,52 @@
-emeraldDB implements
+# emeraldDB implements
 
 ## enveriments
 
 在项目 emeralddb 目录下运行 build.sh ，emralddb 可执行文件编译连接成功，执行后输出hello world。
 
-环境基本搭建完成 保存快照
+### 安装boost库
 
-```bash
-			 mkdir emeralddb
-  176  ls
-  177  cd emeralddb/
-  179  mkdir boost
-  180  mkdir src
-  181  touch build_boost.sh
-  182  touch GUN-AGPL-3.0.txt
-  183  touch build.sh
-  189  sudo apt-get install g++
-  190  gcc -v
-  191  sudo apt-get install gdb
-  193  sudo apt-get install auto-conf
-  194  sudo apt-get install autoconf
-  195  sudo apt-get install libtool
-  196  sudo apt-get install make
-  197  sudo apt-get install x11-apps
-  198  sudo apt-get install unzio
-  199  sudo apt-get install unzip
+参考boost官网提供的[安装方法](https://www.boost.org/doc/libs/1_72_0/more/getting_started/unix-variants.html#id20)
 
-  204  cd ~/temp/
-  206  cd emeralddb_build/
-  207  ll
-  208  tar -zxvf boost_1_72_0.tar.gz
-  209  ls
-  210  unzip bson-cpp-master.zip
-  211  ls
-  212  tar -zxvf eclipse-SDK-4.2.1-linux-gtk-x86_64.tar.gz
-  213  ls
-  214  tar -zxvf apache-log4j-2.13.0-bin.tar.gz
-  215  ls
-  216  cd boost_1_72_0/
-  217  ls
-  218  cp -R * ~/emeralddb/boost/
-  219  cd ~/emeralddb/
-  224  chmod 755 build_boost.sh
-  231  ./build_boost.sh
-  236  find ./ -name bjam
-  237  vim build_boost.sh
-  238  ./build_boost.sh
-  239  vim build_boost.sh
-  240  sudo apt-get install gcc-multilib
-  241  ./build_boost.sh
-  242  sudo apt-get install gcc-multilib g++-multilib
-  243  ./build_boost.sh
-  255  mkdir jdk_linux64
-  275  cd ~/temp/
-  276  ls
-  277  chmod 755 jdk-6u45-linux-x64.bin
-  278  ./jdk-6u45-linux-x64.bin
-  279  ls
-  280  cd jdk1.6.0_45/
-  281  ls
-  282  mkdir -p ~/emeralddb/java
-  283  mv ~/emeralddb/jdk_linux64/ ~/emeralddb/java
-  284  cp -R * ~/emeralddb/java/jdk_linux64/
-  287  cd ~/emeralddb/
-  289  cd src
-  292  mkdir bson
-  293  midor client
-  294  mkdir client
-  295  mkdir dms
-  296  mkdir driver
-  297  mkdir include
-  298  mkdir ixm
-  299  mkdir mov
-  301  ls
-  302  mkdir msg
-  303  mkdir oss
-  304  mkdir pd
-  305  mkdir pmd
-  306  mkdir rtn
-  310  cd ~/temp/emeralddb_build/bson-cpp-master/
-  312  ls
-  313  cp -R src ~/emeralddb/src/bson/
-  314  cp -R GUN* ~/emeralddb/src/bson/
-  315  cp -R GNU* ~/emeralddb/src/bson/
-  316  cp -R APACHE-2.0.txt ~/emeralddb/src/bson/
-  317  cp -R lib ~/emeralddb/src/bson/src/
-  318  ls
-  319  cd ~/emeralddb/src/bson/
-  320  ls
-  321  ls src/
-  322  cd src/
-  323  ls
-  324  cd util/
-  325  ls
-  326  vim time_support.h
-  327  cd ..
-  328  cd lib/
-  329  ls
-  330  vim base64.h
-  331  mv md5.c md5.cpp
-  332  vi nonce.cpp
+如果你希望使用一个单独编译的Boost库，那么首先要对之前下载解压的Boost工程进行编译
+ Boost库的编译安装还有一些依赖库，需要先安装
 
-  342  chmod 755 build
-  343  chmod 755 build.sh
-  344  vim build
-  345  vim build.sh
-  346  cd src/
-  347  ls
-  348  cd emeralddb/
-  349  ls
-  350  cd src/
-  351  ls
-  352  cd pmd/
-  353  ls
-  354  vim pmdMain.cpp
-  355  vim ~/.vimrc
+```csharp
+g++ gdb make mpi-default-dev libicu-dev python-dev libbz2-dev
 ```
 
+Issue the following commands in the shell (don't type `$`; that represents the shell's prompt):
 
+```
+$ cd path/to/boost_1_72_0
+$ ./bootstrap.sh --help
+```
+
+Select your configuration options and invoke `./bootstrap.sh` again without the `--help` option. Unless you have write permission in your system's `/usr/local/` directory, you'll probably want to at least use
+
+```
+$ ./bootstrap.sh --prefix=path/to/installation/prefix
+```
+
+to install somewhere else. Also, consider using the `--show-libraries` and `--with-libraries=`*library-name-list* options to limit the long wait you'll experience if you build everything. Finally,
+
+```
+$ ./b2 install
+```
+
+will leave Boost binaries in the `lib/` subdirectory of your installation prefix. You will also find a copy of the Boost headers in the `include/` subdirectory of the installation prefix, so you can henceforth use that directory as an `#include` path in place of the Boost root directory.
+
+### 安装BSON
+
+bson 是MongoDB开发的开源库，用于数据存储对象的封装。
+
+官方给出的implements：[BSON Libraries]([http://bsonspec.org/implementations.html](http://bsonspec.org/implementations.html))
+
+在EDB系统中，直接下载C++格式的库文件——[bson/src](https://github.com/jbenet/bson-cpp)
+
+使用方法：`#include <bson/bson.h>` 
+
+如果仅仅copy文件目录到项目中，则使用`#include "bson.h"`
 
 ## Socket通信
 
@@ -2236,6 +2165,8 @@ ICommand类有两个公有函数 execute()和getError(), 前者基于建立的so
 
 recvReply()函数
 
+接收socket数据，并将数据保存在ICommand类的私有成员变量`_recvBuf`内存空间。
+
 ```c++
 // receive a message that replyed
 int ICommand::recvReply(ossSocket &sock)
@@ -2298,6 +2229,8 @@ int ICommand::recvReply(ossSocket &sock)
 
 **sendOrder() 发送命令**
 
+参数只包含socket对象和操作码
+
 ```c++
 int ICommand::sendOrder(ossSocket &sock, int opCode)
 {
@@ -2312,6 +2245,60 @@ int ICommand::sendOrder(ossSocket &sock, int opCode)
 ```
 
 测试使用，发送消息为helloworld，
+
+**sendOrder() 发送命令**
+
+参数包括socket对象和函数调用方法指针。这里的onMsgBuild为指向函数的指针类型，如下所示，参数依次为指向缓存空间指针的指针，缓存空间大小，BSON对象。
+
+```cpp
+typedef int(*OnMsgBuild)(char ** ppBuffer, int * pBufferSize,   \
+                bson::BSONObj &obj);
+```
+
+`bsonData = bson::fromjson(_jsonString)` 将ICommand私有成员变量`_jsonString`转化成bson对象bsonData。
+
+将发送缓冲区清空内容，置0.
+
+执行参数指向的函数，传入所需的参数。这里的函数是不同命令对应的消息打包方法，参数格式应相同。
+
+socket对象调用send函数，遵照协议发送消息。
+
+```cpp
+int ICommand::sendOrder(ossSocket &sock, OnMsgBuild onMsgBuild)
+{
+  // OnMsgBuild 是一个函数指针，指向的是要执行的函数
+    int ret = EDB_OK;
+    bson::BSONObj bsonData;
+    try
+    {
+        bsonData = bson::fromjson(_jsonString);
+    }
+    catch(const std::exception& e)
+    {
+        return getError(EDB_INVALID_RECORD);
+    }
+    memset(_sendBuf, 0, SEND_BUF_SIZE);
+    int size = SEND_BUF_SIZE;
+    char *pSendBuf = _sendBuf;
+    // _sendBuf 是类Command的一块私有内存空间 用于缓冲将要发送的字节
+    // onMsgBuild 是用户自定义的函数，不同的命令发送不同的函数。主要功能都是将数据打包成MsgReply数据结构并保存到
+    // pSendBuf指向的内存空间
+    ret = onMsgBuild(&pSendBuf, &size, bsonData);
+    if(ret)
+    {
+        return getError(EDB_MSG_BUILD_FAILED);
+    }
+    // 发送pSendBuf的数据，*(int *)pSendBuf是前int个字节 表示数据包的长度
+    ret = sock.send(pSendBuf, *(int *)pSendBuf);
+    if(ret)
+    {
+        return getError(EDB_SOCK_SEND_FAILED);
+    }
+    return ret;
+}
+```
+
+
 
 #### ConnectCommand 连接命令
 
@@ -2413,6 +2400,67 @@ int QuitCommand::execute(ossSocket &sock, std::vector<std::string> &argVec)
     return ret;
 }
 
+```
+
+#### query命令
+
+query命令是客户端发送到服务端进行数据查询请求的命令。
+
+QueryCommand是封装query命令的类，继承自ICommand类，该类重写handleReply()、execute()两个函数。
+
+execute()是客户端用来执行用户输入的命令：
+
+将用户输入的字符串作为内容传给Command类的私有成员变量`_jsonString`.
+
+向服务端发送命令，执行sendOrder()函数，并传入消息构造方法指针，msgBuild函数。
+
+处理服务端返回的消息，handleReply()，客户端打印输出.
+
+```cpp
+// QUERY
+/******************************QueryCommand**********************************************/
+int QueryCommand::handleReply()
+{
+  // 处理接收到的数据，数据在_recvBuf, 根据通信协议的数据结构MsgReply进行解析
+   MsgReply * msg = (MsgReply*)_recvBuf;
+   int returnCode = msg->returnCode;
+   int ret = getError(returnCode);
+   if(ret)
+   {
+      return ret;
+   }
+   if ( msg->numReturn )
+   {
+      bson::BSONObj bsonData = bson::BSONObj( &(msg->data[0]) );
+      std::cout << bsonData.toString() << std::endl;
+   }
+   return ret;
+}
+
+int QueryCommand::execute( ossSocket & sock, std::vector<std::string> & argVec )
+{
+   int rc = EDB_OK;
+   if( argVec.size() <1 )
+   {
+      return getError(EDB_QUERY_INVALID_ARGUMENT);
+   }
+   _jsonString = argVec[0];
+   if( !sock.isConnected() )
+   {
+      return getError(EDB_SOCK_NOT_CONNECT);
+   }
+
+   rc = sendOrder( sock, msgBuildQuery );
+   PD_RC_CHECK ( rc, PDERROR, "Failed to send order, rc = %d", rc ) ;
+   rc = recvReply( sock );
+   PD_RC_CHECK ( rc, PDERROR, "Failed to receive reply, rc = %d", rc ) ;
+   rc = handleReply();
+   PD_RC_CHECK ( rc, PDERROR, "Failed to receive reply, rc = %d", rc ) ;
+done :
+   return rc;
+error :
+   goto done ;
+}
 ```
 
 
@@ -3091,7 +3139,7 @@ error :
 
 由于要访问线程队列，所以获取锁。首先判断线程池是否存在空闲的线程，即`_idleQueue`队列中是否存在怠性线程，若存在则获取线程ID以及线程控制块CB，并把移除`_idleQueue`队列，根据传入的参数type设置新建的线程类型，设置新建的线程状态为WAITING，注册到`_runQueue`队列，释放锁，最后发送事件RESUME，表示线程启动；若线程池不存在空闲的线程，释放锁，调用私有函数`_createNewEDU()`，从系统新建一个EDU。
 
-```
+```cpp
 // get an EDU from idle pool, if idle is empty, create new one
 int pmdEDUMgr::startEDU(EDU_TYPES type, void *arg, EDUID *eduid)
 {
@@ -3331,7 +3379,7 @@ error:
 
 若处理完消息后discount标记为false，发送缓冲区待发送的返回消息，并从头开始执行本函数；否则退出，出错后报错。
 
-处理消息的函数pmdProcessAgentRequest（）：
+**处理消息的函数pmdProcessAgentRequest（）：**
 
 接收的参数：
 
@@ -3344,7 +3392,77 @@ bool *disconnect,		// 是否断开代理程序线程的标记
 pmdEDUCB *cb			// 代理程序控制块
 ```
 
+注意，这里的ppResultBuffer之所以设计成指向指针的指针，是因为要将函数结果构造成协议规定的MsgReply数据结构的格式，这样的格式占用的字节数可能会增大，而原来系统默认申请的内存空间可能不够，这时就需要为接收的数据重新分配内存，而新的内存空间的地址发生变化。
 
+程序流程：
+
+按照协议解析出接收缓冲区内的MsgReply数据结构格式的消息内容。
+`MsgHeader *header                = (MsgHeader *)pReceiveBuffer ;`
+`int messageLength                = header->messageLen ;`
+` int opCode                       = header->opCode ;`
+
+检查消息长度`messageLength`是否小于`MsgHeader`，若是则表明消息出错，直接丢弃。
+
+根据操作码`opCode`判断需要执行的函数体，以插入数据命令`Insert`为例：
+
+```cpp
+if ( OP_INSERT == opCode )
+      {
+         int recordNum = 0 ;
+         PD_LOG ( PDDEBUG,
+                  "Insert request received" ) ;
+         rc = msgExtractInsert ( pReceiveBuffer, recordNum,
+                                 &pInsertorBuffer ) ;
+         if ( rc )
+         {
+            PD_LOG ( PDERROR,
+                     "Failed to read insert packet" ) ;
+            probe = 20 ;
+            rc = EDB_INVALIDARG ;
+            goto error ;
+         }
+         try
+         {
+            BSONObj insertor ( pInsertorBuffer )  ;
+            PD_LOG ( PDEVENT,
+                     "Insert: insertor: %s",
+                     insertor.toString().c_str() ) ;
+            // insert record
+         }
+         catch ( std::exception &e )
+         {
+            PD_LOG ( PDERROR,
+                     "Failed to create insertor for insert: %s",
+                     e.what() ) ;
+            probe = 30 ;
+            rc = EDB_INVALIDARG ;
+            goto error ;
+         }
+      }
+```
+
+执行接收缓冲区内插入命令消息的数据结构解析函数`msgExtractInsert()`，传入的参数包括接收区内存指针`pReceiveBuffer`，接收到插入数据的个数`recordNum`（由解析函数内部解析得到）, 插入内容的内存指针`pInsertorBuffer`(由解析函数内部解析得到)。
+
+创建一个BSONObj对象insertor，构造方法内直接传入待插入内容的内存指针pInsertorBuffer。insertor用于解析出消息内存空间内存储的BSON数据，暂时将BSON数据调用toString()标准输出之。
+
+其余的OP_QUERY、OP_DELETE、OP_SNAPSHOT与OP_INSERT类似，稍有不同的是，涉及到返回BSON数据到客户端的，将构造一个BSONObjBuilder对象b，b调用`append(key，value)`函数添加BSON内容，最后返回`b.obj()`.
+
+```cpp
+BSONObjBuilder b ;
+b.append ( "insertTimes", 100 ) ;
+b.append ( "delTimes", 1000 ) ;
+b.append ( "queryTimes", 2000 ) ;
+b.append ( "serverRunTime", 100 ) ;
+retObj = b.obj () ;
+```
+
+上述程序执行完毕后：
+
+判断是否收到断开连接命令，若是，则直接返回rc；否则根据操作码opCode选择msgBuildReply()函数重载类型，OP_QUERY执行`msgBuildReply ( ppResultBuffer, pResultBufferSize, rc, &retObj )`, 其余执行`msgBuildReply ( ppResultBuffer, pResultBufferSize, rc, NULL ) `将返回的消息根据协议封装成定义好的数据格式
+
+执行过程中出错根据类型记录日志。
+
+线程接收消息的函数（线程发送消息与之类似，仅仅改变send）：
 
 ```cpp
 int pmdRecv(char *pBuffer, int recvSize, ossSocket *sock, pmdEDUCB *cb)
@@ -3374,4 +3492,1834 @@ error:
 ```
 
 
+
+## DMS 数据管理系统 
+
+Data Management System
+
+### 逻辑结构设计
+
+在EDB数据存储的逻辑结构设计中，参考DB2的设计模式。
+
+DB2数据库的逻辑结构分别为：实例–>数据库–>表空间–>表。DB2将表和索引存储在PAGE页里，page是db2中最小的物理分配单元，表中的每行数据只能包含在一页中，不能跨页。DB2支持的页大小分为：4K、8K、16K、32K四种，当DB2在读取数据的时候，不是按页读取，而是按照extent（块）读取，一个extent是由一组连续的页组成。如果一个表空间有多个容器，为了数据均衡的分布，所以在写数据的时候，按照循环的方式在各个容器里写数据，当一个容器中写满一个extent的时候，将开始在第二个容器继续写extent，周而复始，可以提高读写的效率。
+
+在EDB中，数据库文件包含文件头和多个段(segment)，段内包含固定数量的数据页(page)，文件头存储数据库文件的基本信息，如字符串表示、数据页个数、数据库状态、版本信息等；每个数据页(page)由数据页头部、槽(slot)和数据记录(record)构成，页头部存储页的基本信息，如页标识、长度、标志位、槽数量、最后一个槽所在的偏移、空闲空间大小和空间起始位置，接下来是各个槽，槽指向的是数据记录在页内的偏移位置，槽和数据记录对称放置，一条数据记录包含长度、标识、数据内容。
+
+### 物理存储设计
+
+在EDB的物理存储设计中，参考MongoDB的设计模式。
+
+Memeory-Mapped Files
+下图展示了数据库是如何跟底层系统打交道的。 (虚拟内存是计算机系统内存管理的一种技术。 它使得应用程序认为它拥有连续可用的内存（一个连续完整的地址空间）， 而实际上，它通常是被分隔成多个物理内存碎片， 还有部分暂时存储在外部磁盘存储器上，在需要时进行数据交换。)
+
+内存映射文件是OS通过mmap在内存中创建一个数据文件，这样就把文件映射到一个虚拟内存的区域。
+虚拟内存对于进程来说，是一个物理内存的抽象，寻址空间大小为2^64
+操作系统通过mmap来把进程所需的所有数据映射到这个地址空间(红线)， 然后再把当前需要处理的数据映射到物理内存(灰线)
+当进程访问某个数据时，如果数据不在虚拟内存里， 触发page fault，然后OS从硬盘里把数据加载进虚拟内存和物理内存
+如果物理内存满了，触发swap-out操作，这时有些数据就需要写回磁盘， 如果是纯粹的内存数据，写回swap分区，如果不是就写回磁盘。
+
+![emeraldDB-figure1](./emeraldDB-figure1.png)
+
+有了内存映射文件，要访问的数据就好像都在内存里面，简单化了MongoDB访问和修改数据的逻辑
+
+MongoDB读写都只是和虚拟内存打交道，剩下都交给OS打理 (mongoDB的高效数直接通过系统高效的VM系统来实现的)
+虚拟内存大小=所有文件大小+其他一些开销(连接，堆栈)
+
+如果journal开启，虚拟内存大小差不多翻番(Journaling是MongoDB中非常重要的一项功能，类似于关系数据库中的事务日志。Journaling能够使MongoDB数据库由于意外故障后快速恢复)
+
+使用MMF的好处1：不用自己管理内存和磁盘调度2：LRU策略3：重启过程中，Cache依然在。
+
+使用MMF的坏处2：RAM使用会受磁盘碎片的影响，高预读也会影响2：无法自己优化调度算法，只能使用LRU
+
+#### BSON
+
+-   >   BSON [bee · sahn], short for Bin­ary JSON, is a bin­ary-en­coded seri­al­iz­a­tion of JSON-like doc­u­ments.
+
+-   How is it different from **JSON**?
+
+    >   BSON is designed to be efficient in space, but in some cases is not much more efficient than JSON. In some cases BSON uses even more space than JSON. The reason for this is another of the BSON design goals: traversability. BSON adds some "extra" information to documents, like length of strings and subobjects. This makes traversal faster.
+    >
+    >   BSON is also designed to be fast to encode and decode. For example, integers are stored as 32 (or 64) bit integers, so they don't need to be parsed to and from text. This uses more space than JSON for small integers, but is much faster to parse.
+    >
+    >   In addition to compactness, BSON adds additional data types unavailable in JSON, notably the **BinData** and **Date** data types.
+
+    
+
+    **二、bson在MongoDB中的使用**
+
+    MongoDB使用了BSON这种结构来存储数据和网络数据交换。把这种格式转化成一文档这个概念(Document)，因为BSON是schema-free的，所以在MongoDB中所对应的文档也有这个特征，这里的一个Document也可以理解成关系数据库中的一条记录(Record)，只是这里的Document的变化更丰富一些，如Document可以嵌套。
+
+    MongoDB以BSON做为其存储结构的一种重要原因是其可遍历性。
+
+    
+
+    **三、几个BSON的例子**
+
+    **3.1 一个Document的BSON表示：**
+
+    ```
+    {  title:"MongoDB",  last_editor:"192.168.1.122",  last_modified:new Data("27/06/2011"),  body:"MongoDB introduction",  categories:["Database","NoSQL","BSON"],  revieved:false  }  
+    ```
+
+    这是一个简单的BSON结构体，其中每一个element都是由key/value对组成的
+
+    **3.2 一个嵌套的例子**
+
+    ```
+    {  name:"lemo",  age:"12",  address:{  city:"suzhou",  country:"china",  code:215000  }  scores:[  {"name":"english","grade:3.0},  {"name":"chinese","grade:2.0}  ]  }  
+    ```
+
+    这是一种相对复杂点的例子，其中包括了地址对象和分数对象数组，这里使用了嵌套文档对象与文档对象数据来表示单个学生的信息，这种嵌套的文档结构要使用关系数据库来做是比较复杂的。
+
+    
+
+    **4. BSON c++ 代码分析**
+
+    MongoDB源代码树中包括了BSON的代码库，你只要包含bson.h这个头文件就行了，其中有四个类是比较重要的：
+
+    ```
+    * mongo::BSONObj，这个是BSON对象的表示  * mongo::BSONElement，这个是BSON对象中元素的表示方法   * mongo::BSONObjBuilder,这是构建BSON对象的类  * mongo::BSONObjIterator，这是用来遍历BSON对象中每一个元素的一个迭代器  
+    ```
+
+    **下面是创建一个BSON对象**
+
+    
+
+    ```
+    BSONObjBuilder b;  b.append("name","lemo"),  b.append("age",23);  BSONObj p = b.obj();  
+    ```
+
+    或者
+
+    ```
+    BSONObj p = BSONObjBuilder().append("name","lemo").append("age",23).obj();  
+    ```
+
+    或者用流的方法来
+
+    
+
+    ```
+    BSONObjBuilder b;  b << "name" << "lemo" << "age" << 23;  BSONObj p = b.obj();  
+    ```
+
+    或者用宏来创建一个对象
+
+    ```
+    BSONObj p = BSON( "name" << "Joe" << "age" << 33 );  
+    ```
+
+    这里分析一下这四个类的一些代码：
+
+    mongo::BSONObj主要是用于存储BSON对象的，具体的存储格式如下
+
+    ```
+    <unsigned totalSize> {<byte BSONType><cstring FieldName><Data>}* EOO          --------------------              -------------                -----------------               ----           ---  totalSize: 一个总的字节长度，包含自身  BSONType: 对象类型,这里有Boolean,String,Date等类型，具体可以参考bsontypes.h这个文件  FieldName: 这里表示字段名  Data: 这里是放具体的数据，数据的存储方式根据不同的BSONType来  * : 表示可以有多个元素组成  EOO: 这是一个结束符，一般是/x00来表示  
+    ```
+
+    一般来说，BSONObj的创建都是通过BSONObjBuilder来做的，除非你已经得到了其字节流，那可以直接生成BSONObj
+
+    
+
+    mongo::BSONElement 它主要是用于存储对象中的单个元素，存储格式如下
+
+    ```
+    <type><fieldName><value>  
+    ```
+
+    这个对象主要是指向BSONObj对象中具体元素的地址，它不实际存储元素的值。
+
+    mongo::BSONObjBuilder 它主要是用于生成BSONObj，这个对象集成了StringBuilder,它主要用于存储实际的字节点，用于替换std::stringstream，而这个StringBuilder集成了BufBuilder,这是一个可以动态增长内存缓冲区，但最大容量不能超过64MB的大小，也就是说一个BSONObj最大不能超过64MB。
+
+    
+
+    mongo::BSONOBjIterator 它主要是用来遍历BSONObj对象中的每一个元素，提供了类似于stl iterator的一些接口，它还提供了一个ForEach宏来提供更方便的操作，如
+
+    ```
+    if (foo) {             BSONForEach(e, obj)                 doSomething(e);         }  
+    ```
+
+### 具体实现
+
+#### 数据库文件头部
+
+
+
+```cpp
+struct dmsHeader
+{
+	char 			_eyeCatcher[DMS_HEADER_EYECATCHER_LEN]; //文件标识
+	unsigned int 	_size; // 数据页个数
+	unsigned int 	_flag; // 状态标记
+	unsigned int 	_version; // 版本信息
+};
+```
+
+
+
+#### 数据页头部
+
+
+
+```cpp
+struct dmsPageHeader
+{
+	char 			_eyeCatcher[DMS_PAGE_EYECATCHER_LEN]; // 页标识
+	unsigned int 	_size; // 页大小
+	unsigned int 	_flag; // 状态标记
+	unsigned int 	_numSlots; // 页内槽数量
+	unsigned int 	_slotOffset; // 最后一个槽所在偏移
+	unsigned int  	_freeSpace; // 空闲空间大小
+	unsigned int 	_freeOffset; // 空闲空间起始位置偏移
+	unsigned int 	_data[0]; // 数据记录
+};
+```
+
+
+
+### 内存映射文件设计
+
+数据库文件映射到内存
+
+定义一个文件映射类ossMmapFile，
+
+类的私有成员变量：
+
+```cpp
+ossPrimitiveFileOp 				_fileOp;
+ossXLatch 						_mutex;
+bool							_opened;
+std::vector<ossMmapSegment>		_segments;
+char 							_fileName[OSS_MAX_PATHSIZE];
+```
+
+_fileOp是ossPrimitiveFileOp类型的变量，表示的是已经定义好，并用于Linux操作系统下对文件的操作，包括Open，Close等函数。
+
+_mutex是一个互斥锁，数据库文件在多线程访问下保证数据的安全可靠性。
+
+_opened标记文件对象是否已经打开。
+
+_fileName数据库文件名称。
+
+_segments在内存文件映射中的逻辑结构，段。是存储ossMmapSegment类型变量的vector容器。
+
+```cpp
+class _ossMmapSegment
+{
+    public:
+    void * 				_ptr; // 段地址指针
+    unsigned int 		_length; // 段长度
+    unsigned long long 	_offset; // 偏移地址
+
+    _ossMmapSegment( void * ptr,
+                    unsigned int length,
+                    unsigned long long offset)
+    {
+        _ptr 	= ptr;
+        _length = length;
+        _offset = offset;
+    }
+};
+```
+
+
+
+**打开文件 open()**
+
+传入参数文件名和操作类型，具体见文件操作类。
+
+在多线程访问下，请求互斥锁get().
+
+调用文件操作对象`_fileOp`的Open方法，打开该文件。
+
+标记打开状态为true。
+
+设置数据库文件映射对象内文件名为已经打开的文件名。
+
+无论是否报错，及时释放互斥锁。
+
+```cpp
+int _ossMmapFile::open(const char *pFileName,
+						unsigned int options)
+{
+	int rc = EDB_OK;
+	_mutex.get();
+	rc = _fileOp.Open(pFileName, options);
+	if(EDB_OK == rc)
+	{
+		_opened = true;
+	}
+	else
+	{
+		PD_LOG(PDERROR, "Failed to open file, rc = %d", rc);
+		goto error;
+	}
+	strncpy(_fileName, pFileName, sizeof(_fileName));
+
+done:
+	_mutex.release();
+	return rc;
+error:
+	goto done;
+}
+```
+
+**关闭文件 close()**
+
+文件的最小操作粒度为逻辑结构设计的段(segment)，关闭文件映射需要逐一关闭内存中已经映射所有段。
+
+首先申请互斥锁。
+
+解除文件内存映射时，调用系统的munmap函数，传入segment的地址指针，内存大小。
+
+全部解除后，清空vector，调用clear()函数。
+
+关闭打开的文件描述符，并标记内存文件映射状态为false。
+
+最后释放互斥锁。
+
+```cpp
+void _ossMmapFile::close()
+{
+	_mutex.get();
+	for(vector<ossMmapSegment>::iterator i = _segments.begin();
+			i != _segments.end(); ++i)
+	{
+		munmap((void *)(*i)._ptr, (*i)._length);
+	}
+	_segments.clear();
+
+	if(_opened)
+	{
+		_fileOp.Close();
+		_opened = false;
+	}
+	_mutex.release();
+}
+```
+
+**建立内存映射**
+
+申请互斥锁
+
+创建一个映射段对象，用于初始化映射内数据结构
+
+调用文件操作对象的getSize()方法获取目标文件的大小，并存储到变量fileSize变量中。
+
+map函数传入的前两个参数offset和length，前者表示映射文件的偏移量(从offset+1位置开始映射)，后者表示映射的内存大小。二者相加应该不超过文件的大小，即不能溢出文件，否则无法映射就报错。
+
+调用linux系统的mmap()函数将目标文件的内容映射到内存，传入参数详见mmap函数说明，这里指定的参数均不复杂。
+
+映射失败后读取错误码errno，报错。映射成功后返回映射的内存起始地址。
+
+将新映射的内存作为新的段保存信息(指针、长度、偏移)，存储到vector容器`_segments`中。
+
+map方法的参数中pAddress是指向新段的地址的地址，目的是能够改变该地址指针。
+
+最后释放互斥锁。
+
+```cpp
+int _ossMmapFile::map(unsigned long long offset,
+						unsigned int length,
+						void **pAddress)
+{
+	_mutex.get();
+	int rc = EDB_OK;
+	ossMmapSegment seg(0, 0, 0);
+	unsigned long long fileSize = 0;
+	void * segment = NULL;
+	if(0 == length)
+	{
+		goto done;
+	}
+	rc = _fileOp.getSize((off_t *)&fileSize);
+	if(rc)
+	{
+		PD_LOG(PDERROR, "Failed to get get file size, rc = %d", rc);
+		goto error;
+	}
+	if(offset + length > fileSize)
+	{
+		PD_LOG(PDERROR, "Offset is greater than file size");
+		rc = EDB_INVALIDARG;
+		goto error;
+	}
+	// map region into memory
+	segment = mmap(NULL, length, PROT_READ|PROT_WRITE,
+					MAP_SHARED, _fileOp.getHandle(), offset);
+	if(MAP_FAILED == segment)
+	{
+		PD_LOG(PDERROR,	"Failed to map offset %ld length %d, errno = %d",
+				offset, length, errno);
+		if(ENOMEM == errno)
+		{
+			rc = EDB_OOM;
+		}
+		else if(EACCES == errno)
+			rc = EDB_SYS;
+		goto error;
+	}
+	seg._ptr = segment;
+	seg._length = length;
+	seg._offset = offset;
+	_segments.push_back(seg);
+	if(pAddress)
+	{
+		*pAddress = segment;
+	}
+
+done:
+	_mutex.release();
+	return rc;
+error:
+	goto done;
+}
+```
+
+
+
+### 数据库文件
+
+数据库文件类继承自内存映射文件，即数据库文件可以映射到内存中进行读写。除此之外，数据库文件类应该实现的方法应该还包括:
+
+extendFile，文件扩展。当单个的数据库文件大小不足以存储给定的数据内容后，调用该方法，扩大目标数据库文件的空间占用大小。
+
+initNew，初始化新数据库文件的文件头部信息。
+
+#### 扩展数据文件空间
+
+申请`DMS_EXTEND_SIZE`大小个字节数的内存缓冲空间，并将内容置0。
+
+传入的size参数为扩展文件的大小，要求为系统指定`DMS_EXTEND_SIZE`的整数倍。
+
+1.将文件操作对象的文件游标seek到末尾，
+
+2.再写入全为0的缓冲空间字节内容，占用空间如数增加，
+
+重复1，2操作直到扩展的大小已经足够size。
+
+```cpp
+int dmsFile::_extendFile(int size)
+{
+	int rc = EDB_OK;
+	char temp[DMS_EXTEND_SIZE] = {0};
+	memset(temp, 0, DMS_EXTEND_SIZE);
+	if(size%DMS_EXTEND_SIZE != 0)
+	{
+		rc = EDB_SYS;
+		PD_LOG(PDERROR, "Invalid extend size, must be multipe if %d", DMS_EXTEND_SIZE);
+		goto error;
+	}
+	// write file
+	for(int i=0;i<size;i+=DMS_EXTEND_SIZE)
+	{
+		_fileOp.seekToEnd();
+		rc = _fileOp.Write(temp, DMS_EXTEND_SIZE);
+		PD_RC_CHECK(rc, PDERROR, "Failed to write fo file, rc = %d", rc);
+	}
+
+done:
+	return rc;
+error:
+	goto done;
+}
+```
+
+#### 扩展一个段大小的空间
+
+与扩展文件大小不同的是，extendSegment函数是扩展文件对象里一个数据段，数据段内包括定义好头部的数据页。
+
+首先获取文件对象的偏移量到文件末尾，然后扩展文件空间为一个段的空间大小，
+
+调用map函数将扩展后的空间映射到内存中，内存起始地址保存在data变量中。
+
+按照协议**逐个**定义数据页头部的信息，包括页标识、大小、状态标记、槽数量、最后一个槽偏移、空闲空间大小、空闲空间起始地址。
+
+将**所有**新增的数据页作为空闲空间，保存数据到数据管理文件对象的`_freeSpaceMap`容器中。
+
+将新增段的地址保存到数据管理文件对象的`_body`中。文件对象的头中记录一个新增的段数量。
+
+```cpp
+// caller must hold extend latch
+int dmsFile::_extendSegment()
+{
+	// extend a new segment
+	int rc = EDB_OK;
+	char *data = NULL;
+	int freeMapSize = 0;
+	dmsPageHeader pageHeader ;
+	offsetType offset =0;
+	// first lets get the size of file before extend
+	rc = _fileOp.getSize(&offset);
+	PD_RC_CHECK(rc, PDERROR, "Failed to get file size, rc = %d", rc);
+	// extend the file
+	rc = _extendFile(DMS_FILE_SEGMENT_SIZE);
+	PD_RC_CHECK(rc, PDERROR, "Failed to extend segment rc= %d", rc);
+	// map from original end to new end
+	rc = map(offset, DMS_FILE_SEGMENT_SIZE, (void **)&data);
+	PD_RC_CHECK(rc, PDERROR, "Failed to map file, rc = %d", rc);
+	// create page header strucure and we are going to copy to each page
+	strcpy(pageHeader._eyeCatcher, DMS_PAGE_EYECATCHER);
+	pageHeader._size = DMS_PAGESIZE;
+	pageHeader._flag = DMS_PAGE_FLAG_NORMAL;
+	pageHeader._numSlots = 0;
+	pageHeader._slotOffset = sizeof(dmsPageHeader);
+	pageHeader._freeSpace = DMS_PAGESIZE - sizeof(dmsPageHeader);
+	pageHeader._freeOffset = DMS_PAGESIZE;
+	// copy header to each page
+	for(int i = 0; i < DMS_FILE_SEGMENT_SIZE; i+=DMS_PAGESIZE)
+	{
+		memcpy(data+i, (char *)&pageHeader, sizeof(dmsPageHeader));
+	}
+	// free space handling
+	freeMapSize = _freeSpaceMap.size();
+	// insert into free space map
+	for(int i = 0; i < DMS_PAGES_PER_SEGMENT; ++i)
+	{
+		_freeSpaceMap.insert(pair<unsigned int, PAGEID>(
+								pageHeader._freeSpace, i+freeMapSize));
+
+	}
+	// push the segment into body list
+	_body.push_back(data);
+	_header->_size += DMS_PAGES_PER_SEGMENT;
+
+done:
+	return rc;
+error:
+	goto done;
+}
+```
+
+
+
+#### 数据库文件初始化
+
+数据库管理系统文件对象创建完成后，可以通过初始化函数`initialize(fileName)`来初始化这个文件的数据结构，例如文件头部。
+
+将目标文件的名称写入数据库管理对象的成员`_pFileName`中，保存文件名。
+
+调用类内部的open函数，打开文件。
+
+获取文件的大小，并将大小保存在偏移量offset中。
+
+如果偏移量为0，表示文件为空，这时需要初始化该文件，保证具有完整的文件头部。
+
+装载文件内的数据内容。
+
+```cpp
+int dmsFile::initialize(const char *pFileName)
+{
+	offsetType offset = 0;
+	int rc = EDB_OK;
+	// duplicate file name
+	_pFileName = strdup(pFileName);
+	if(!_pFileName)
+	{
+		// out of memory
+		rc = EDB_OOM;
+		PD_LOG(PDERROR, "Failed to duplicate file name.");
+	}
+	// open file
+	rc = open(_pFileName, OSS_PRIMITIVE_FILE_OP_OPEN_ALWAYS);
+	PD_RC_CHECK(rc, PDERROR, "Failed to open file %s, rc = %d",
+				_pFileName, rc);
+getfilesize:
+	// get file size:
+	rc = _fileOp.getSize(&offset);
+	PD_RC_CHECK(rc, PDERROR, "Failed to get file size, rc = %d", rc);
+	// if file size is 0, that mean it is newly created file and we should initialize it
+	if(!offset)
+	{
+		rc = _initNew();
+		PD_RC_CHECK(rc, PDERROR, "Failed to initialize file, rc = %d", rc);
+		goto getfilesize;
+	}
+	// load data
+	rc = _loadData();
+	PD_RC_CHECK(rc, PDERROR, "Failed to load data, rc = %d", rc);
+done :
+   return rc ;
+error :
+   goto done ;
+}
+```
+
+**空文件初始化initNew()**
+
+将文件扩展`DMS_FILE_HEADER_SIZE`(默认64K)个字节，用以存储文件头部信息。
+
+映射文件到内存中，从文件起始位置开始，映射长度为文件头部占用字节数，最后将映射的段地址赋值给数据库文件对象的成员`_header`指针。
+
+接下来操作新映射的段指针，更改文件内信息。
+
+加入头部的文件标识信息`DMS_HEADER_EYECATCHER`, 设置空间大小为0，修改数据文件状态为`DMS_HEADER_FLAG_NROMAL`,
+
+修改版本信息。
+
+```cpp
+int dmsFile::_initNew()
+{
+	// initialize a newly created file. lets append DMS_FILE_HEADER_SIZE Bytes and then
+	// initalize the header
+	int rc = EDB_OK;
+	rc = _extendFile(DMS_FILE_HEADER_SIZE);
+	PD_RC_CHECK(rc, PDERROR, "Failed to extend file, rc = %d", rc);
+	rc = map(0, DMS_FILE_HEADER_SIZE, (void **)&_header);
+	PD_RC_CHECK(rc, PDERROR, "Failed to map, rc = %d", rc);
+
+	strcpy(_header->_eyeCatcher,DMS_HEADER_EYECATCHER);
+	_header->_size = 0;
+	_header->_flag = DMS_HEADER_FLAG_NROMAL;
+	_header->_version = DMS_HEADER_VERSION_CURRENT;
+
+done:
+	return rc;
+error:
+	goto done;
+}
+```
+
+#### 装载数据内容
+
+检查类内头部指针是否存在，否则调用map函数映射文件头部到内存中，并将内存地址赋值给成员`_header`.
+
+文件头部包含有文件内数据页page的数量size。文件内段是不定数量的，但是段内的数据页数量是固定的，判断之。
+
+根据文件头记录的数据页数量以及每个段拥有的固定数量数据页 计算出 数据文件内存在的段数。
+
+将文件内所有的段映射到内存中，从0开始迭代到段数量，内存映射的段地址保存到临时char型变量data指针，将所有的data指针保存到vector容器`_body`中.
+
+段内页的数量固定，从0迭代到固定数量，每个页读取pageHeader，
+
+页头部包含空闲空间大小，以及当前迭代次数作为pageID存储在multimap容器`_freeSpaceMap`中，
+
+页头部包含槽数量，迭代执行：
+
+每个槽占四个字节，槽的值表示存储数据的偏移量slotOffset，当偏移量为空时继续迭代下个槽，
+
+根据槽记录的偏移量计算出数据记录地址，并将其封装成BSON对象，最后保存槽id和pageid到数据记录地址。
+
+通过桶管理检查ID是否冲突，并建立索引。
+
+```cpp
+int dmsFile::_loadData()
+{
+	int rc = EDB_OK;
+	int numPage = 0;  // 文件内数据页（page）数量
+	int numSegments = 0; // 文件内数据段(segment)数量
+	dmsPageHeader *pageHeader = NULL;
+	char *data = NULL;
+	BSONObj bson;
+	SLOTID slotID = 0;
+	SLOTOFF slotOffset = 0;
+	dmsRecordID recordID;
+
+	// check if header is valid
+	if(!_header)
+	{
+		rc = map(0, DMS_FILE_HEADER_SIZE, (void**)&_header);
+		PD_RC_CHECK(rc, PDERROR, "Failed to map file header, rc = %d", rc);
+	}
+	numPage = _header->_size;
+	if(numPage%DMS_PAGES_PER_SEGMENT)
+	{
+        // 段内有固定数量的数据页
+		rc = EDB_SYS;
+		PD_LOG(PDERROR, "Failed to load data, partial segments detected");
+		goto error;	
+	}
+    // 根据文件头记录的数据页数量以及每个段拥有的固定数量数据页 计算出 数据文件内存在的段数
+	numSegments = numPage/DMS_PAGES_PER_SEGMENT;
+	// get the segments number
+	if(numSegments>0)
+	{
+		for(int i=0;i<numSegments;i++)
+		{
+			// map each segment into memory
+			rc = map(DMS_FILE_HEADER_SIZE + DMS_FILE_SEGMENT_SIZE*i,
+						DMS_FILE_SEGMENT_SIZE,
+							(void **)&data);
+			PD_RC_CHECK(rc, PDERROR, "Failed to map segment %d, rc = %d", i, rc);
+			_body.push_back(data);
+			// initialize each page into freespacemap
+			for(unsigned int k = 0; k < DMS_PAGES_PER_SEGMENT; ++k)
+			{
+				pageHeader = (dmsPageHeader*)(data + k*DMS_PAGESIZE);
+				_freeSpaceMap.insert(
+					pair<unsigned int, PAGEID>(pageHeader->_freeSpace, k));
+				slotID = (SLOTID)pageHeader->_numSlots;
+				recordID._pageID  = (PAGEID)k;
+				// for each record in the pag, lets insert into index
+				for(unsigned int s = 0; s < slotID; ++s)
+				{
+					slotOffset = *(SLOTOFF *)(data + k*DMS_PAGESIZE +
+						sizeof(dmsPageHeader) + s*sizeof(slotOffset));
+					if(DMS_SLOT_EMPTY == slotOffset)
+					{
+						continue;
+					}
+					bson = BSONObj(data + k*DMS_PAGESIZE+ slotOffset + sizeof(dmsRecord));
+					recordID._slotID = (SLOTID)s;
+					 rc = _ixmBucketMgr->isIDExist(bson);
+					 PD_RC_CHECK(rc, PDERROR, "Failed to call isIDExist, rc = %d", rc);
+					 rc = _ixmBucketMgr->createIndex(bson, recordID);
+					 PD_RC_CHECK(rc, PDERROR, "Failed to call ixm createIndex, rc = %d", rc);
+				}
+			}
+		} //for(int i=0;i<numSegments;i++)
+	} // if(numSegments>0)
+done:
+	return rc;
+error:
+	goto done;
+}
+```
+
+
+
+#### 更新空闲空间
+
+参数header中包含该page中空闲空间的起始位置，
+
+调用multimap容器'\_freeSpaceMap'的`equal_range`方法找到与page头中暴露的空闲空间大小相同的一组pair，
+
+在该pairs中寻找到标记的pageID，将其所在的pair删除。
+
+更新参数中的需要更新的空闲空间大小，并在`_freeSpaceMap`中新增这条记录。
+
+```cpp
+void dmsFile::_updateFreeSpace(dmsPageHeader *header, int changeSize,
+								PAGEID pageID)
+{
+	unsigned int freeSpace = header->_freeSpace;
+	std::pair<std::multimap<unsigned int, PAGEID>::iterator,
+				std::multimap<unsigned int, PAGEID>::iterator> ret;
+	ret = _freeSpaceMap.equal_range(freeSpace);
+	for(std::multimap<unsigned int, PAGEID>::iterator it=ret.first;
+			it != ret.second;++it)
+	{
+		if(it->second == pageID)
+		{
+			_freeSpaceMap.erase(it);
+			break;
+		}
+	}
+	// increase page free space
+	freeSpace += changeSize;
+	header->_freeSpace = freeSpace;
+	// insert into free space map
+	_freeSpaceMap.insert(pair<unsigned int, PAGEID>(freeSpace, pageID));
+
+}
+```
+
+#### 重新分配失效空间
+
+当某条记录被删除后，指向该记录的槽变为-1（0xFFFFFFFF），意为失效的记录。当一个数据页内有很多记录失效后，为保证页内空间不被浪费，应该设计一个方法，回收失效的空间。
+
+![dms_recoverspace](./dms_recoverspace.png)
+
+如上图所示，构造两个指针pLeft和pRight，分别指向槽位置和槽指向的记录的内存地址。读取槽内的偏移地址，并由此获取槽指向的记录头，如果槽不为-1，表明数据有效，此时pRight移动到数据记录左侧size(记录头内表明的数据长度)位置，这时判断之前是否占用已失效的记录空间，若是则调用memmove()函数移动size大小记录到pRight位置，若否继续迭代，最后pLeft指针向右偏移SLOT大小的量以读取下一个槽信息；如果槽为-1，表明数据失效，此时pRight指针应停留在原位，等待后面的有效的数据记录覆盖当前内存块。
+
+这里使用isRecovered作为是否需要移动内存记录的标记。迭代时，迭代次数为槽数量，每次迭代槽位置更新一次.
+
+最后更新文件头部信息空闲空间起始位置的偏移量。
+
+```cpp
+void dmsFile::_recoverSpace(char *page)
+{
+	char *pLeft = NULL;
+	char *pRight = NULL;
+	SLOTOFF slot = 0;
+	int recordSize = 0;
+	bool isRecover = false;
+	dmsRecord *recordHeader = NULL;
+	dmsPageHeader *pageHeader = NULL;
+
+	pLeft = page + sizeof(dmsPageHeader);
+	pRight = page + DMS_PAGESIZE;
+	pageHeader = (dmsPageHeader *)page;
+	// recover space
+	for(unsigned int i = 0; i<pageHeader->_numSlots; ++i)
+	{
+		slot = *((SLOTOFF*)(pLeft + sizeof(SLOTOFF)*i));
+		if(DMS_SLOT_EMPTY != slot)
+		{
+			recordHeader = (dmsRecord *)(page + slot);
+			recordSize = recordHeader->_size;
+			pRight -= recordSize;
+			if(isRecover)
+			{
+				memmove(pRight, page+slot, recordSize);
+				*((SLOTOFF*)(pLeft + sizeof(SLOTOFF)*i)) = (SLOTOFF)(pRight-page);
+			}
+		}
+		else
+		{
+			isRecover = true;
+		}
+	}
+	pageHeader->_freeOffset = pRight - page;
+}
+```
+
+
+
+### 数据操作
+
+#### 插入 insert
+
+插入的数据记录record为BSON数据对象BSONObj，
+
+首先获取记录的大小，调用BSONObj对象的objsize()方法。如果记录大小超过系统规定的记录长度`DMS_MAX_RECORD`, 就报错。
+
+验证记录的key是否包含`_id`标记
+
+retry：加锁，保证对数据库文件写操作安全，
+
+在数据库文件中找到一个数据页，该数据页应该有足够的空间写入数据内容和数据元信息。
+
+如果没找到足够大小的数据页，则释放读写锁，
+
+扩展一个新的段，即调用`_extendSegment()`方法。注意，可能在多线程情况下，存在其他线程也要扩展段，所以要加入一个新的扩展段的锁(互斥锁)，尝试获取锁，获取到锁后进行扩展段；没获取到锁说明其他线程正在扩展段，等待即可，调用get()。最后该线程获得互斥锁，将其释放。
+
+重新寻找足够大小的数据页，即重复retry标记。
+
+由寻找到足够大小的数据页ID，计算出内存地址。并读取数据页头部信息。
+
+计算头部的实际空闲空间大小是否大于头部记录的空闲空间偏移减去最后一个槽所在偏移，并且新插入的数据记录加上头部和槽后是否超过空闲空间偏移，若都是，则表明该页可以进行内存整理后插入记录。
+
+进行数据整理recoverSpace.
+
+整理后验证新增数据(记录内容+SLOT+记录头部)是否小于页头部记录的空闲空间大小，是否大于当前页的空闲空间偏移减去最后一个槽偏移得出的实际内存空间大小，以上二者有一条为是，则表明数据整理失败，报错。
+
+计算出插入数据后记录的内存地址偏移位置，并将其写入新的槽中。
+
+创建记录的头部信息结构，并将其写入上述内存偏移位置，再将记录写入内存。
+
+从内存读取指定大小的数据，赋予outRecord。
+
+读取pageID, slotID 赋予返回值rid。
+
+更新页头部元数据信息，槽数量自加一次，槽偏移加一次，空闲空间位置重新指定。
+
+更新数据库的空闲空间map，即调用updatefreeSpace()方法，传入页信息和空闲空间改变量
+
+最后释放锁。
+
+```cpp
+int dmsFile::insert(BSONObj &record, BSONObj &outRecord, dmsRecordID &rid)
+{
+	int rc = EDB_OK;
+	PAGEID pageID = 0;
+	char *page = NULL;
+	dmsPageHeader *pageHeader = NULL;
+	int recordSize = 0;
+	SLOTOFF offsetTemp = 0;
+	const char *pGKeyFiledName = NULL;
+	dmsRecord recordHeader;
+
+	recordSize = record.objsize();
+	// when we attempt to insert record,first we have to verify it include _id field
+	if(recordSize > DMS_MAX_RECORD)
+	{
+		rc = EDB_INVALIDARG;
+		PD_LOG(PDERROR, "record cannot be longer than 4MB.");
+		goto error;
+	}
+	pGKeyFiledName = gKeyFiledName;
+
+	// make sure _id exists
+	if(record.getFieldDottedOrArray(pGKeyFiledName).eoo())
+	{
+		rc = EDB_INVALIDARG;
+		PD_LOG(PDERROR, "record must be with _id");
+		goto error;
+	}
+
+retry:
+	// lock the database file
+	_mutex.get();
+	// and then we should get the required record size
+	pageID = _findPage(recordSize + sizeof(dmsRecord) );
+	// if there is not enough space in any exsiting pages, lets release dbfile lock
+	if(DMS_INVALID_PAGEID == pageID)
+	{
+		_mutex.release();
+		// if there is not enough space in any existing pages, lets release db lock and
+		// try to allocate a new segment by calling _extendSegment
+		if(_extendMutex.try_get())
+		{
+			// calling _extendSegment
+			rc = _extendSegment();
+			if(rc)
+			{
+				PD_LOG(PDERROR, "Failed to extend segment, rc = %d", rc);
+				_extendMutex.release();
+				goto error;
+			}
+		}
+		else{
+			// there be another one extending the db segment, so we wait that one finish
+			_extendMutex.get();
+		}
+		_extendMutex.release();
+		// new segment created, so lets findpage again.
+		goto retry;
+	}
+
+	// find the in-memory offset for the page
+	page = pageToOffset(pageID);
+
+	if(!page)
+	{
+		rc = EDB_SYS;
+		PD_LOG(PDERROR, "Failed to find the page,rc = %d", rc);
+		goto error_releasemutex;
+	}
+	// set page header
+	pageHeader = (dmsPageHeader *)page;
+	if(memcpy(pageHeader->_eyeCatcher, DMS_PAGE_EYECATCHER, DMS_PAGE_EYECATCHER_LEN)
+		!= 0)
+	{
+		rc = EDB_SYS;
+		PD_LOG(PDERROR, "Invalid page heaser!");
+		goto error_releasemutex;
+	}
+	// slot offset is the last byte of slots
+	// free offset is the first byte of data
+	// so freeOffset - slotOffset is the actual free space excluding holes
+	if(
+		// make sure there is still holes to recover
+		(pageHeader->_freeSpace > 
+			pageHeader->_freeOffset - pageHeader->_slotOffset) &&
+		// if there is no free space exluding holes
+		(pageHeader->_slotOffset + recordSize + sizeof(dmsRecord) + sizeof(SLOTID) > 
+			pageHeader->_freeOffset) 
+		)
+	{
+		// recover empty hole from page
+		_recoverSpace(page);
+	}
+	if(
+		// make sure there is enough free space
+		(pageHeader->_freeSpace < recordSize + sizeof(dmsRecord) + sizeof(SLOTID)) ||
+		(pageHeader->_freeOffset - pageHeader->_slotOffset < 
+			recordSize + sizeof(dmsRecord) + sizeof(SLOTID)) 
+		)
+	{
+		PD_LOG(PDERROR, "somethine big wrong !");
+		rc = EDB_SYS;
+		goto error_releasemutex;
+	}
+	offsetTemp = pageHeader->_freeOffset - recordSize - sizeof(dmsRecord);
+	recordHeader._size = recordSize + sizeof(dmsRecord);
+	recordHeader._flag = DMS_RECORD_FLAG_NORMAL;
+
+	// copy the slot
+	*(SLOTOFF *)(page + sizeof(dmsPageHeader) + 
+		pageHeader->_numSlots*sizeof(SLOTOFF)) = offsetTemp;
+	// copy the record header
+	memcpy(page+offsetTemp, (char *)&recordHeader, sizeof(dmsRecord));
+	// copy the record body
+	memcpy(page+offsetTemp+sizeof(dmsRecord),
+			record.objdata(),
+			recordSize);
+	outRecord = BSONObj(page + offsetTemp + sizeof(dmsRecord));
+	rid._pageID = pageID;
+	rid._slotID = pageHeader->_numSlots;
+	// modify metadata in page
+	pageHeader->_numSlots++;
+	pageHeader->_slotOffset += sizeof(SLOTID);
+	pageHeader->_freeOffset = offsetTemp;
+	// modify database metadata
+	_updateFreeSpace(pageHeader, -(recordSize + sizeof(SLOTID) + sizeof(dmsRecord)),
+						pageID);
+	// release lock
+	_mutex.release();
+
+done:
+	return rc;
+error_releasemutex:
+	_mutex.release();
+error:
+	goto done;
+}
+```
+
+#### 删除 remove
+
+传入参数：记录的rid数据结构，rid则具有pageID和slotID
+
+获取读写锁，
+
+由rid的pageID，通过调用pageToOffset方法获取到该page在文件内存映射的地址。
+
+由pageID，slotID调用searchSlot()方法获取solt。
+
+将该slot置-1，并将该slot指向的数据记录头部信息flag更新为dropped状态。
+
+更新数据库元信息，更新空闲空间大小，updateFreeSpace
+
+释放锁。
+
+```cpp
+int dmsFile::remove(dmsRecordID &rid)
+{
+	int rc = EDB_OK;
+	SLOTOFF slot = 0;
+	char *page = NULL;
+	dmsRecord *recordHeader = NULL;
+	dmsPageHeader *pageHeader = NULL;
+	std::pair<std::multimap<unsigned int, PAGEID>::iterator,
+				std::multimap<unsigned int, PAGEID>::iterator> ret;
+	_mutex.get();
+	// find the page in memory
+	page = pageToOffset(rid._pageID);
+	if(!page)
+	{
+		rc = EDB_SYS;
+		PD_LOG(PDERROR, "Failed to find the page for %u:%u", rid._pageID, rid._slotID);
+		goto error;
+	}
+	// search the given slot
+	rc = _searchSlot(page, rid, slot);
+	if(rc)
+	{
+		PD_LOG(PDERROR, "Failed to search slot, rc = %d", rc);
+		goto error;
+	}
+	if(DMS_SLOT_EMPTY == slot)
+	{
+		rc = EDB_SYS;
+		PD_LOG(PDERROR, "The record is dropped!");
+		goto error;
+	}
+	// set page header
+	pageHeader = (dmsPageHeader *)page;
+	// set slot to empty
+	*(SLOTID *)(page + sizeof(dmsPageHeader) +
+				rid._slotID * sizeof(SLOTID)) = DMS_SLOT_EMPTY;
+	// set record header
+	recordHeader = (dmsRecord *)(page + slot);
+	recordHeader->_flag = DMS_RECORD_FLAG_DROPPED;
+	// update database metadata
+	_updateFreeSpace(pageHeader, recordHeader->_size, rid._pageID);
+
+done:
+	_mutex.release();
+	return rc;
+error:
+	goto done;
+}
+```
+
+
+
+#### 查询 find
+
+传入参数为记录rid的数据结构，以及返回的结果 BSON数据结构
+
+由于查询操作是读取操作，故使用读写锁的共享锁函数get_shared()。
+
+由rid的成员pageID获取数据页偏移地址，再获取slot。
+
+由slot得到数据记录的偏移地址，读取头部信息，若头部标记该记录为DROPPED状态，表明数据失效
+
+将内存读到的数据作为BSONObj的对象的拷贝返回。
+
+```cpp
+int dmsFile::find(dmsRecordID &rid, BSONObj &result)
+{
+	int rc = EDB_OK;
+	SLOTOFF slot = 0;
+	char *page = NULL;
+	dmsRecord *recordHeader = NULL;
+	// S lock the database
+	_mutex.get_shared();
+	// goto the page and verify the slot is valid
+	page = pageToOffset(rid._pageID);
+	if(!page)
+	{
+		rc = EDB_SYS;
+		PD_LOG(PDERROR, "Failed to find the page.");
+		goto error;
+	}
+	rc = _searchSlot(page, rid, slot);
+	if(rc)
+	{
+		PD_LOG(PDERROR, "Failed to search slot, rc = %d", rc);
+		goto error;
+	}
+	// if slot is empty, something big wrong
+	if(DMS_SLOT_EMPTY == slot)
+	{
+		rc = EDB_SYS;
+		PD_LOG(PDERROR, "The record is dropped!");
+		goto error;
+	}
+
+	// get the record header
+	recordHeader = (dmsRecord *)(page + slot);
+	// if recordHeader->_flag is dropped, this record is dropped already
+	if(DMS_RECORD_FLAG_DROPPED == recordHeader->_flag)
+	{
+		rc = EDB_SYS;
+		PD_LOG(PDERROR, "this data is dropped!");
+		goto error;
+	} 
+	result = BSONObj(page + slot + sizeof(dmsRecord)).copy();
+
+done:
+	_mutex.release_shared();
+	return rc;
+error:
+	goto error;	
+}
+```
+
+### 索引
+
+索引的本质，消耗最少的资源，跳过不可能的记录。索引实际上就是一种数据结构。
+
+产品化的数据库必然存在优秀的索引技术，以提高数据查询的高效率。常见的索引有hash、B树和B+树。
+
+hash就是散列索引，通过将数据散列在一维数组(其实是一系列的桶中)，操作系统对数组的随机访问资源消耗是O(1)的，所以散列索引对单一数据的访问效率极高。然而由于散列索引的建立的机制是对每个数据进行一次散列函数运算进而得出索引位置，故其难以应对范围查询；B树建立的索引则是按照多叉树进行有序排列的数据，数据查询的资源消耗是由树的高度决定的，并且需要比较同一个节点内所有元素，资源消耗为O(N)；而B+树则优化了B树，通过指针连接所有的叶子节点，可以进行范围查询。
+
+大多数的商业数据库都使用B+树建立索引，然而一套完整的B+树源代码极其复杂，本系统则使用hash的方法建立索引。
+
+#### 散列函数
+
+我们使用的散列函数应该尽可能满足均匀散列假设，以下对均匀散列假设的定义来自于Sedgewick的《算法》一书：
+
+>   （均匀散列假设）我们使用的散列函数能够均匀并独立地将所有的键散布于0到M – 1之间。
+
+​    以上定义中有两个关键字，第一个是均匀，意思是我们对每个键计算而得的桶号有M个“候选值”，而均匀性要求这M个值被选中的概率是均等的；第二个关键字是独立，它的意思是，每个桶号被选中与否是相互独立的，与其他桶号是否被选中无关。这样一来，满足均匀性与独立性能够保证键值对在散列表的分布尽可能的均匀，不会出现“许多键值对被散列到同一个桶，而同时许多桶为空”的情况。
+
+ 已经有大量基于概率统计而设计的哈希函数计算哈希值，我们找到网上开源的c代码程序使用。
+
+函数参数为数据，以及数据长度，经过复杂位数计算，得到对应哈希值。
+
+```c
+#undef get16bits
+#if (defined(__GNUC__) && defined(__i386__)) || defined(__WATCOMC__) \
+  || defined(_MSC_VER) || defined (__BORLANDC__) || defined (__TURBOC__)
+#define get16bits(d) (*((const unsigned short *) (d)))
+#endif
+
+#if !defined (get16bits)
+#define get16bits(d) ((((unsigned int)(((const unsigned char *)(d))[1])) << 8)\
+                       +(unsigned int)(((const unsigned char *)(d))[0]) )
+#endif
+unsigned int ossHash ( const char *data, int len )
+{
+   unsigned int hash = len, tmp ;
+   int rem ;
+   if ( len <= 0 || data == NULL ) return 0 ;
+   rem = len&3 ;
+   len >>= 2 ;
+   for (; len > 0 ; --len )
+   {
+      hash += get16bits (data) ;
+      tmp   = (get16bits (data+2) << 11) ^ hash;
+      hash  = (hash<<16)^tmp ;
+      data += 2*sizeof(unsigned short) ;
+      hash += hash>>11 ;
+   }
+   switch ( rem )
+   {
+   case 3:
+      hash += get16bits (data) ;
+      hash ^= hash<<16 ;
+      hash ^= ((char)data[sizeof (unsigned short)])<<18 ;
+      hash += hash>>11 ;
+      break ;
+   case 2:
+      hash += get16bits(data) ;
+      hash ^= hash <<11 ;
+      hash += hash >>17 ;
+      break ;
+   case 1:
+      hash += (char)*data ;
+      hash ^= hash<<10 ;
+      hash += hash>>1 ;
+   }
+   hash ^= hash<<3 ;
+   hash += hash>>5 ;
+   hash ^= hash<<4 ;
+   hash += hash>>17 ;
+   hash ^= hash<<25 ;
+   hash += hash>>6 ;
+   return hash ;
+}
+#undef get16bits
+```
+
+#### hash冲突
+
+由于哈希算法被计算的数据是无限的，而计算后的结果范围有限，因此总会存在不同的数据经过计算后得到的值相同，这就是哈希冲突（collision）。解决hash冲突的方法有开放定址法、链地址法（拉链法）、再哈希法、建立公共溢出区等方法。
+
+另一种解决哈希冲突的做法，即为每个Hash值，建立一个Hash桶(Bucket)，桶的容量是固定的，也就是只能处理固定次数的冲突，如1048576个Hash桶，每个桶中有4个表项(Entry)，总计4M个表项。其实这两种的实现思路雷同，就是对Hash表中每个Hash值建立一个冲突表，即将冲突的几个记录以表的形式存储在其中。
+
+首先**哈希桶**的个数是固定的，有用户构建的时候输入，一旦构建，个数就已经固定；查找的时候首先将key值通过哈希函数获取哈希值，根据哈希值获取到对应的哈希桶，为了解决冲突问题，每个桶(bucket)内可以存储多个自定义的数据结构EleHash，计算出相同hash值得数据key，可以遍历各个EleHash，判断是否为目标key。
+
+设计的数据结构：
+
+桶内元素 EleHash
+
+```c
+struct ixmEleHash
+{
+	const char *data; // 指向的索引key
+	dmsRecordID recordID; // 数据记录地址
+
+};
+```
+
+桶 Bucket
+
+桶内设计一个红黑树结构的multimap容器`_bucketMap`存储桶内所有冲突的元素EleHash，容器的键值对为\<hash函数计算的值，EleHash元素\>。
+
+桶为公共资源，在多线程模式访问下要保证可靠性，所以要加上共享锁，
+
+每个桶的任务就是增删查经hash分配来的key，并建立起数据库的索引。
+
+```cpp
+class ixmBucket
+	{
+	private:
+		// the map is hashNum and eleHash
+		std::multimap<unsigned int, ixmEleHash> _bucketMap;
+		ossSLatch _mutex;
+	public:
+		// get the record whether exists
+		int isIDExist(unsigned int hashNum, ixmEleHash &eleHash);
+		int createIndex(unsigned int hashNum, ixmEleHash &eleHash);
+		int findIndex(unsigned int hashNum, ixmEleHash &eleHash);
+		int removeIndex(unsigned int hashNum, ixmEleHash &eleHash);
+		
+	};
+```
+
+桶管理者 BucketManager
+
+前面已经介绍过，桶的数量是程序设计好的，所有桶的管理以及上层应用调用交给Manager。
+
+包括桶的初始化，上层应用传递记录以及记录ID过来，Manager调用hash算法进行桶分配，从而完成增删查的操作。
+
+桶存储在vector容器中，
+
+最后保证程序结束所有桶分配的内存空间回收。
+
+```cpp
+class ixmBucketManager
+{
+private:
+	// class ixmBucket
+	// process data
+	int _processData(BSONObj &record, 
+                        dmsRecordID &recordID, //in 
+						unsigned int &hashNum,					// out
+						ixmEleHash &eleHash, 					// out
+						unsigned int &random);
+private:
+	std::vector<ixmBucket *>_bucket;
+public:
+	ixmBucketManager()
+	{
+
+	}
+	~ixmBucketManager()
+	{
+		ixmBucket *pIxmBucket = NULL;
+		for(int i = 0; i<IXM_HASH_MAP_SIZE; ++i)
+		{
+			pIxmBucket = _bucket[i];
+			if(pIxmBucket)
+				delete pIxmBucket;
+		}
+	}
+	int initialize();
+	int isIDExist(BSONObj &record);
+	int createIndex(BSONObj &record, dmsRecordID &recordID);
+	int findIndex(BSONObj &record, dmsRecordID &recordID);
+	int removeIndex(BSONObj &record, dmsRecordID &recordID);
+
+};
+```
+
+#### 桶内操作
+
+桶类内的成员函数包括
+
+**判断桶内是否已经存在某个hash**
+
+对桶内容map器的操作应该保证线程安全，这里的判断函数，仅仅读取map容器，所以申请读锁。
+
+调用map容器的`equal_range()`函数，传入hash值，即可获取到map容器内与hash值相同的一组元素，first为第一个，second为第二个；
+
+将目标eleHash封装为BSONElement对象，调用BSONElement对象的value()方法即可取得内存存储的数据值，
+
+在这一组元素中遍历每个元素的值中保存的eleHash对象，若目标对象与当前迭代对象value()返回值相同，表明id已存在。
+
+```cpp
+int ixmBucketManager::ixmBucket::isIDExist(unsigned int hashNum,
+											ixmEleHash &eleHash)
+{
+	int rc = EDB_OK;
+	BSONElement destEle;
+	BSONElement sourEle;
+	ixmEleHash 	exsitEle;
+	std::pair<std::multimap<unsigned int, ixmEleHash>::iterator,
+				std::multimap<unsigned int, ixmEleHash>::iterator> ret;
+	
+	// 对每个桶进行加锁
+	_mutex.get_shared();
+	// 检查桶内是否已经存在相同hash值的元素
+	ret = _bucketMap.equal_range(hashNum);
+	sourEle = BSONElement(eleHash.data);
+	for(std::multimap<unsigned int, ixmEleHash>::iterator it = ret.first;
+			it != ret.second; ++it)
+	{
+		exsitEle = it->second;
+		destEle = BSONElement(exsitEle.data);
+		if(sourEle.type() == destEle.type())
+		{
+			if(sourEle.valuesize() == destEle.valuesize())
+			{
+				if(!memcmp(sourEle.value(), destEle.value(),
+							destEle.valuesize()))
+				{
+					rc = EDB_IXM_ID_EXIST;
+					PD_LOG(PDERROR, "record _id:%d had existed", sourEle.value());
+					goto error;
+				}
+			}
+		}
+	}
+done:	
+	_mutex.release_shared();
+	return rc;
+error:
+	goto done;
+}
+```
+
+
+
+#### 建立索引
+
+**桶管理者初始化**
+
+EDB系统规定桶的数量为`IXM_HASH_MAP_SIZE`,迭代创建Bucket对象，并将其存放到vector容器`_bucket`中，
+
+创建对象失败报内存不足错。
+
+```cpp
+int ixmBucketManager::initialize()
+{
+	int rc = EDB_OK;
+	ixmBucket * temp = NULL;
+	for(int i = 0; i < IXM_HASH_MAP_SIZE; ++i)
+	{
+		temp = new(std::nothrow)ixmBucket();
+		if(!temp)
+		{
+			rc = EDB_OOM;
+			PD_LOG(PDERROR, "Failed to allocate new ixmBucket, rc = %d", rc);
+			goto error;
+		}
+		_bucket.push_back(temp);
+		temp = NULL;
+	}
+
+done:
+	return rc;
+error:
+	goto done;
+}
+```
+
+**哈希计算**
+
+函数传入参数为数据的BSONObj对象，数据记录ID，hash计算结果，存放到桶的元素，桶在容器中的位置。
+
+对BSONObj对象调用getField()函数，传入参数为`_id`，即可获得要查询记录的document内`_id`值，int型。
+
+检查BSON对象中是否存在元素`_id`(校验)并且为NumberInt或String类型。
+
+调用hash函数`ossHash()`，传入参数为目标记录中`_id`值，值占用的空间大小。
+
+计算的hash值模系统规定的桶数量，即为存储记录的eleHash元素存放的桶位置索引。
+
+将参数中的数据记录指针和记录ID存储到eleHash元素。
+
+```cpp
+int ixmBucketManager::_processData(BSONObj &record, 
+									dmsRecordID &recordID,
+                                    unsigned int &hashNum,
+									ixmEleHash &eleHash,
+									unsigned int &random)
+{
+	int rc = EDB_OK;
+	BSONElement element = record.getField(IXM_KEY_FILEDNAME);
+	// check if _id exists and correct
+	if(element.eoo() ||
+		(element.type() != NumberInt && element.type() != String))
+	{
+		rc = EDB_INVALIDARG;
+		PD_LOG(PDERROR, "record must be with _id");
+		goto error;
+	}
+	// hash _id
+	hashNum = ossHash(element.value(), element.valuesize());
+	random = hashNum % IXM_HASH_MAP_SIZE;
+	eleHash.data = element.rawdata();
+	eleHash.recordID = recordID;
+done:
+	return rc;
+error:
+	goto done;
+}
+```
+
+**插入新索引**
+
+所有的记录信息在索引模块都会经历一次哈希计算，得到一个hash值和一个封装的eleHash元素。
+
+```cpp
+int ixmBucketManager::createIndex(BSONObj &record, dmsRecordID &recordID)
+{
+	int rc = EDB_OK;
+	unsigned int hashNum = 0;
+	unsigned int random  = 0;
+	ixmEleHash eleHash;
+	rc = _processData(record, recordID, hashNum, eleHash, random);
+	PD_RC_CHECK(rc, PDERROR, "Failed to process data. rc = %d", rc);
+	rc = _bucket[random]->createIndex(hashNum, eleHash);
+	PD_RC_CHECK(rc, PDERROR, "Failed to create index, rc = %d",rc);
+	recordID = eleHash.recordID;
+done:
+	return rc;
+error:
+	goto done;
+}
+```
+
+加锁，注意这里对容器进行修改，应该调用get()函数，加写锁。
+
+在桶内map容器中插入上述两个变量。
+
+释放锁。
+
+```cpp
+int ixmBucketManager::ixmBucket::createIndex(unsigned int hashNum,
+											ixmEleHash &eleHash)
+{
+	int rc = EDB_OK;
+	_mutex.get();
+	rc = _bucketMap.insert(
+		pair<unsigned int, ixmEleHash>(hashNum, eleHash));
+	PD_RC_CHECK(rc, PDERROR, "Failed to insert hashElem, rc = %d", rc);
+done:
+	_mutex.release();
+	return rc;
+error:
+	goto done;
+}
+```
+
+#### 删除某个键
+
+客户端给定一个记录，将其删除，并返回该记录在dms系统中的ID。
+
+同样，对记录进行hash计算处理，获取hash值，eleHash类元素以及hash表索引地址。
+
+调用桶内的removeIndex方法，删除键。
+
+```cpp
+int ixmBucketManager::removeIndex(BSONObj &record, dmsRecordID &recordID)
+{
+	int rc = EDB_OK;
+	unsigned int hashNum = 0;
+	unsigned int random  = 0;
+	ixmEleHash eleHash;
+	rc = _processData(record, recordID, hashNum, eleHash, random);
+	PD_RC_CHECK(rc, PDERROR, "Failed to process data. rc = %d", rc);
+	rc = _bucket[random]->removeIndex(hashNum, eleHash);
+	PD_RC_CHECK(rc, PDERROR, "Failed to remove index, rc = %d", rc);
+	recordID._pageID = eleHash.recordID._pageID;
+	recordID._slotID = eleHash.recordID._slotID;
+
+error:
+	goto done;
+done:
+	return rc;
+}
+```
+
+桶内操作：
+
+与查找是否ID冲突的函数isIDExist()类似，找到桶内map容器中是否存在相同的hash值，在这一组键值对遍历，
+
+直到找到eleHash中存储的data地址转化成的BSONElement对象的value()返回值相同，
+
+找到后，调用map的erase()方法，删除之。
+
+否则报错，没有找到该键。
+
+```cpp
+int ixmBucketManager::ixmBucket::removeIndex(unsigned int hashNum,
+											ixmEleHash &eleHash)
+{
+	int rc = EDB_OK;
+	BSONElement destEle;
+	BSONElement sourEle;
+	ixmEleHash 	exsitEle;
+	std::pair<std::multimap<unsigned int, ixmEleHash>::iterator,
+				std::multimap<unsigned int, ixmEleHash>::iterator> ret;
+	
+	// 对每个桶进行加锁
+	_mutex.get();
+	ret = _bucketMap.equal_range(hashNum);
+	sourEle = BSONElement(eleHash.data);
+	for(std::multimap<unsigned int, ixmEleHash>::iterator it = ret.first;
+			it != ret.second; ++it)
+	{
+		exsitEle = it->second;
+		destEle = BSONElement(exsitEle.data);
+		if(sourEle.type() == destEle.type())
+		{
+			if(sourEle.valuesize() == destEle.valuesize())
+			{
+				if(!memcmp(sourEle.value(), destEle.value(),
+							destEle.valuesize()))
+				{
+					eleHash.recordID = exsitEle.recordID;
+					_bucketMap.erase(it);
+					goto done;
+				}
+			}
+		}
+	}
+	rc = EDB_INVALIDARG;
+	PD_LOG(PDERROR, "record _id not exist, rc = %d", rc);
+	goto error;
+
+done:	
+	_mutex.release();
+	return rc;
+error:
+	goto done;
+}
+```
+
+#### 索引某个键
+
+传入参数为BSONObj对象的记录，输出记录在数据库文件的id。
+
+```cpp
+int ixmBucketManager::findIndex(BSONObj &record, dmsRecordID &recordID)
+{
+	int rc = EDB_OK;
+	unsigned int hashNum = 0;
+	unsigned int random  = 0;
+	ixmEleHash eleHash;
+	rc = _processData(record, recordID, hashNum, eleHash, random);
+	PD_RC_CHECK(rc, PDERROR, "Failed to process data. rc = %d", rc);
+	rc = _bucket[random]->findIndex(hashNum, eleHash);
+	PD_RC_CHECK(rc, PDERROR, "Failed to find index, rc = %d", rc);
+    recordID = eleHash.recordID;
+
+error:
+	goto done;
+done:
+	return rc;
+}
+```
+
+
+
+函数结构与删除键类似，区别在于，找到目标hash值后将map容器中的值eleHash，取成员recordID，并返回之。
+
+```cpp
+int ixmBucketManager::ixmBucket::findIndex(unsigned int hashNum, 
+											ixmEleHash &eleHash)
+{
+	int rc = EDB_OK;
+	BSONElement destEle;
+	BSONElement sourEle;
+	ixmEleHash 	exsitEle;
+	std::pair<std::multimap<unsigned int, ixmEleHash>::iterator,
+				std::multimap<unsigned int, ixmEleHash>::iterator> ret;
+	
+	// 对每个桶进行加锁
+	_mutex.get_shared();
+	ret = _bucketMap.equal_range(hashNum);
+	sourEle = BSONElement(eleHash.data);
+	for(std::multimap<unsigned int, ixmEleHash>::iterator it = ret.first;
+			it != ret.second; ++it)
+	{
+		exsitEle = it->second;
+		destEle = BSONElement(exsitEle.data);
+		if(sourEle.type() == destEle.type())
+		{
+			if(sourEle.valuesize() == destEle.valuesize())
+			{
+				if(!memcmp(sourEle.value(), destEle.value(),
+							destEle.valuesize()))
+				{
+					eleHash.recordID = exsitEle.recordID;
+					goto done;
+				}
+			}
+		}
+	}
+	rc = EDB_IXM_ID_NOT_EXIST;
+	PD_LOG(PDERROR, "record _id not exist, hashNum = %d", hashNum);
+	goto error;
+
+done:	
+	_mutex.release_shared();
+	return rc;
+error:
+	goto done;
+}
+```
+
+
+
+## runtime调用接口
+
+数据管理系统dms提供了三个函数：insert、remove、find，以提供给EDB数据库系统的其他程序对数据进行管理。
+
+设计rtn中间程序，系统内核krcb提供rtn调用。rtn则实现对dmsFile的控制管理接口封装。
+
+rtn模块控制着索引和数据文件，在程序内部实现了BSON数据记录的插入、删除和查询功能，成员变量`_dmsFile`和`_ixmBucketMgr`是对数据文件模块和索引模块类的实例。
+
+```cpp
+class rtn
+{
+private:
+	dmsFile 			*_dmsFile;
+	ixmBucketManager 	*_ixmBucketMgr;
+public:
+	rtn();
+	~rtn();
+	int rtnInitialize();
+	int rtnInsert(bson::BSONObj &record);
+	int rtnFind(bson::BSONObj &inRecord, bson::BSONObj &outRecord);
+	int rtnRemove(bson::BSONObj &record);
+};
+```
+
+### 初始化
+
+rtn模块的初始化就是对索引的哈希桶管理和数据管理系统的初始化
+
+```cpp
+int rtn::rtnInitialize()
+{
+	int rc = EDB_OK;
+	_ixmBucketMgr = new(std::nothrow)ixmBucketManager();
+	if(!_ixmBucketMgr)
+	{
+		rc = EDB_OOM;
+		PD_LOG(PDERROR, "Failed to new ixmBucketManager");
+		goto error;
+	}
+	_dmsFile = new(std::nothrow)dmsFile(_ixmBucketMgr);
+	if(!_dmsFile)
+	{
+		rc = EDB_OOM;
+		PD_LOG(PDERROR, "Failed to new dmsFile");
+		goto error;
+	}
+	// init ixmBucketManager
+	rc = _ixmBucketMgr->initialize();
+	if(rc)
+	{
+		PD_LOG(PDERROR, "Failed to call ixmBucketManager initialize, rc = %d", rc);
+		goto error;
+	}
+	// init dms
+	rc = _dmsFile->initialize(pmdGetKRCB()->getDataFilePath());
+	if(rc)
+	{
+		PD_LOG(PDERROR, "Failed to call dms initialize. rc = %d", rc);
+		goto error;
+	}
+
+done:
+	return rc;
+error:
+	goto done;
+}
+```
+
+### 插入数据调用
+
+先检测记录的id是否会冲突，
+
+调用数据文件管理insert方法，插入数据到文件中。
+
+由rtn的成员桶管理者调用createIndex方法，对记录建立索引。
+
+```cpp
+int rtn::rtnInsert(BSONObj &record)
+{
+	int rc = EDB_OK;
+	dmsRecordID recordID;
+	BSONObj outRecord;
+	// check if _id exists
+	rc = _ixmBucketMgr->isIDExist(record);
+	PD_RC_CHECK(rc, PDERROR, "Failed to call ixmBucketManager isIDExist, rc = %d", rc);
+	// whlie data insert into file
+	rc = _dmsFile->insert(record, outRecord, recordID);
+	if(rc)
+	{
+		PD_LOG(PDERROR, "Failed to call dms insert, rc = %d", rc);
+		goto error;
+	}
+	rc = _ixmBucketMgr->createIndex(outRecord, recordID);
+	PD_RC_CHECK(rc, PDERROR, "Failed to call ixmBucketManager createIndex, rc = %d", rc);
+done:
+	return rc;
+error:
+	goto done;
+}
+```
+
+### 查询和删除调用
+
+首先在索引中查找到key，在由索引的ID在数据库文件中进行数据访问。
+
+删除与之类似。
+
+```cpp
+int rtn::rtnFind(BSONObj &inRecord, BSONObj &outRecord)
+{
+	int rc = EDB_OK;
+	dmsRecordID recordID;
+	rc = _ixmBucketMgr->findIndex(inRecord, recordID);
+	PD_RC_CHECK(rc, PDERROR, "Failed to call ixm findIndex, rc = %d", rc);
+	rc = _dmsFile->find(recordID, outRecord);
+	PD_RC_CHECK(rc, PDERROR, "Failed to call dmsFile find, rc = %d", rc);
+
+error:
+	goto done;
+done:
+	return rc;
+}
+
+int rtn::rtnRemove(BSONObj &record)
+{
+	int rc = EDB_OK;
+	dmsRecordID recordID;
+	rc = _ixmBucketMgr->removeIndex(record, recordID);
+	PD_RC_CHECK(rc, PDERROR, "Failed to call ixmBucketManager removeIndex, rc = %d", rc);
+	rc = _dmsFile->remove(recordID);
+	PD_RC_CHECK(rc, PDERROR, "Failed to call dmsFile remove, rc = %d", rc);
+
+error:
+	goto done;
+done:
+	return rc;
+}
+
+```
+
+## 监控
+
+monCB模块负责记录系统使用状况，包括
+
+数据插入次数，数据查询次数，数据删除次数，系统运行时间等。
+
+将其控制递交给系统内核控制块，krcb。
+
+在外部对系统执行的增删查操作，均进行记录。
+
+定义的模块类：
+
+```cpp
+class MonAppCB
+{
+public:
+	MonAppCB();
+	~MonAppCB();
+
+	void setInsertTimes(long long insertTimes);
+	long long getInsertTimes() const;
+	void increaseInsertTimes();
+	void setDelTimes(long long delTimes);
+	long long getDelTimes() const;
+	void increaseDelTimes();
+	void setQueryTimes(long long queryTimes);
+	long long getQueryTimes() const;
+	void increaseQueryTimes();
+	long long getServerRunTime();
+
+private:
+	long long _insertTimes;
+	long long _delTimes;
+	long long _queryTimes;
+	struct timeval _start;
+	ossSLatch _mutex;
+};
+```
+
+函数定义：
+
+```cpp
+void MonAppCB::setInsertTimes(long long insertTimes)
+{
+	_insertTimes = insertTimes;
+}
+
+long long MonAppCB::getInsertTimes() const
+{
+	return _insertTimes;
+}
+
+void MonAppCB::increaseInsertTimes()
+{
+	_mutex.get();
+	_insertTimes++;
+	_mutex.release();
+}
+```
+
+内核控制块调用：
+
+```cpp
+ MonAppCB        _monAppCB;
+// get monitor app cb
+inline MonAppCB & getMonAppCB()
+{
+    return _monAppCB;
+}
+```
+
+程序过程调用
+
+```cpp
+// insert record
+rc = rtnMgr->rtnInsert(insertor);
+if(!rc)
+{
+	krcb->getMonAppCB().increaseInsertTimes();
+}
+// snapshot
+MonAppCB monAppCB = krcb->getMonAppCB();
+try
+{
+    BSONObjBuilder b ;
+    b.append ( "insertTimes", monAppCB.getInsertTimes()) ;
+    b.append ( "delTimes", monAppCB.getDelTimes() ) ;
+    b.append ( "queryTimes", monAppCB.getQueryTimes() ) ;
+    b.append ( "serverRunTime", monAppCB.getServerRunTime() ) ;
+    retObj = b.obj () ;
+}
+```
 
