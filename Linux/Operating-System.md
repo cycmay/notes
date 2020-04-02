@@ -530,7 +530,7 @@ TODO: Tiny Web服务器
 
 其基本思想如下图：
 
-![image-20200320143509600](/Users/bicycle/Documents/gitHubR/notes/Linux/os-fig1.png)
+![image-20200320143509600](imgs/os-fig1.png)
 
 当处理器检测到有事件（虚拟存储器缺页、算数溢出或者系统定时器产生的信号）发生时，会通过一张异常表作为一个跳转表，进行间接过程调用即异常处理。
 
@@ -555,7 +555,7 @@ TODO: Tiny Web服务器
 
 在程序中，PC(程序计数器)的值唯一对应着可执行目标文件（或者动态链接到程序的共享对象）中的指令，一系列PC值构成的序列就是逻辑控制流。
 
-![逻辑控制流](/Users/bicycle/Documents/gitHubR/notes/Linux/imgs/os-fig3.png)
+![逻辑控制流](imgs/os-fig3.png)
 
 如上图所示，三个进程是轮流使用处理器的，每个进程执行他的流的一部分，该部分执行完毕后，资源被其他进程占用，处于挂起状态。
 
@@ -569,7 +569,7 @@ TODO: Tiny Web服务器
 
 一块私有空间的结构包括：文本、数据、堆和栈段。顶部的四分之一是预留给内核的，其余四分之三是给用户程序的。
 
-![进程空间地址](/Users/bicycle/Documents/gitHubR/notes/Linux/imgs/os-fig4.png)
+![进程空间地址](imgs/os-fig4.png)
 
 #### 用户模式与内核模式
 
@@ -626,15 +626,15 @@ pid_t fork(void);
 
 当fork函数调用多次时，画进程图会更直观些。
 
-![image-20200320175518671](/Users/bicycle/Documents/gitHubR/notes/Linux/imgs/os-fig5.png)
+![image-20200320175518671](imgs/os-fig5.png)
 
 当父进程执行一个fork函数，会创建一个子进程并打印出hello，父进程也打印出hello。
 
-![image-20200320175635783](/Users/bicycle/Documents/gitHubR/notes/Linux/imgs/os-fig6.png)
+![image-20200320175635783](imgs/os-fig6.png)
 
 当父进程第一次调用fork函数，创建一个子进程，然后父进程和子进程又各自调用fork函数创建自己的子进程，每个进程都调用printf函数，输出四行hello。
 
-![image-20200320175849476](/Users/bicycle/Documents/gitHubR/notes/Linux/imgs/os-fig7.png)
+![image-20200320175849476](imgs/os-fig7.png)
 
 #### 回收子进程
 
@@ -723,7 +723,7 @@ execve函数在当前进程的上下文中加载并运行一个新的程序，�
 
 信号允许进程中断其他进程。一个信号(signal)就是一条消息，它通知进程某种类型的事件已经在系统中发生了。Linux中30种不同的信号：
 
-![image-20200320213411025](/Users/bicycle/Documents/gitHubR/notes/Linux/imgs/os-fig8.png)
+![image-20200320213411025](imgs/os-fig8.png)
 
 #### 发送信号
 
@@ -854,7 +854,7 @@ mmap函数要求内核创建一个新的虚拟存储器区域，最好是从地�
 
 大多数C程序在运行时需要额外虚拟存储器，使用的是动态存储器分配器(dynamic memory allocator)。动态存储器分配维护着一个进程的虚拟存储器区域，称为堆(heap)。在大多数Unix系统中，堆是一个请求二进制零的区域，它紧接在未初始化的bss区域后开始，并向上生长(高位地址)。对于每个进程，内核维护着一个变量brk(break)，指向堆的顶部。
 
-![image-20200322204839801](/Users/bicycle/Documents/gitHubR/notes/Linux/imgs/os-fig9.png)
+![image-20200322204839801](imgs/os-fig9.png)
 
 C标准库提供了一个malloc程序包的显示分配器，程序通过调用malloc函数来从堆中分配块。
 
@@ -885,7 +885,7 @@ void *malloc(size_t size);
 
 垃圾收集器将存储器视为一张有向可达图(reachability graph)，该图的节点被分成一组根节点(root node)和一组堆节点(heap node)。每个堆节点对应于堆中的一个已分配块。有向边p->q意味着p中的某个位置指向q的某个位置。
 
-![image-20200323171934881](/Users/bicycle/Documents/gitHubR/notes/Linux/imgs/os-fig10.png)
+![image-20200323171934881](imgs/os-fig10.png)
 
 当存在一条从任意根节点出发并到达p的有向路径时，这时节点p时可达的(reachable)。在任何时刻，和垃圾对应的不可达节点是不能被应用再次使用的。垃圾收集器的角色是维护可达图的某种表示，并通过释放不可达节点将他们返回给空闲链表，来定期的回收他们。
 
@@ -945,7 +945,7 @@ void sigchld_handler(int sig)
 
 多线程执行模型和多进程执行模型相似。每个进程开始生命周期都是单一线程，这个线程称为主线程(main thread)。在某一时刻，主线程创建一个对等线程(peer thread)， 从这个时间点开始，两个线程就并发运行。最后，因为主线程执行一个慢速系统调用，例如read或者sleep或者中断，控制就会通过上下文切换传递到对等线程。在控制传递回主线程前，对等线程回执行一段时间。
 
-![image-20200323204937590](/Users/bicycle/Documents/gitHubR/notes/Linux/imgs/os-fig11.png)
+![image-20200323204937590](imgs/os-fig11.png)
 
 另一方面，线程的执行不同于进程，因为一个线程的上下文要比一个进程的上下文小得多，线程的上下文切换要比进程的上下文切换快得多。而且，线程不按照严格的父子层次组织，主线程和其他线程的区别仅在于它总是进程中第一个运行的线程。对等线程可以读写相同的共享数据，也可以杀死对等线程。
 

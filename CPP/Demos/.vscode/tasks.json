@@ -1,0 +1,138 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "build_dir",
+            "command": "mkdir",
+            "args": [
+                "-p",
+                "build",
+                "bin"
+            ],
+            "windows": {
+                "options": {
+                    "shell": {
+                        "executable": "powershell.exe"
+                    }
+                },
+                "args": [
+                    "-Force",
+                    "build",
+                    "bin"
+                ]
+            }
+        },
+        {
+            "label": "cmake",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-DCMAKE_BUILD_TYPE=${input:CMAKE_BUILD_TYPE}",
+                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+                "../"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/build"
+            },
+            "windows": {
+                "args": [
+                    "-DCMAKE_BUILD_TYPE=${input:CMAKE_BUILD_TYPE}",
+                    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+                    "../",
+                    "-G",
+                    "\"CodeBlocks - NMake Makefiles\""
+                ],
+                "options": {
+                    "shell": {
+                        "executable": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat",
+                        "args": [
+                            "${input:PLATFORM}",
+                            "-vcvars_ver=${input:vcvars_ver}",
+                            "&&"
+                        ]
+                    }
+                }
+            },
+            "dependsOn": [
+                "build_dir"
+            ]
+        },
+        {
+            "label": "build",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "./",
+                "--target",
+                "all",
+                "--"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/build"
+            },
+            "problemMatcher": "$gcc",
+            "windows": {
+                "options": {
+                    "shell": {
+                        "executable": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat",
+                        "args": [
+                            "${input:PLATFORM}",
+                            "-vcvars_ver=${input:vcvars_ver}",
+                            "&&"
+                        ]
+                    }
+                },
+                "problemMatcher": "$msCompile"
+            },
+            "dependsOn": [
+                "cmake"
+            ]
+        }
+    ],
+    "inputs": [
+        {
+            "id": "CMAKE_BUILD_TYPE",
+            "type": "pickString",
+            "description": "What CMAKE_BUILD_TYPE do you want to create?",
+            "options": [
+                "Debug",
+                "Release",
+                "RelWithDebInfo",
+                "MinSizeRel",
+            ],
+            "default": "Debug"
+        },
+        {
+            "id": "PLATFORM",
+            "type": "pickString",
+            "description": "What PLATFORM do you want to create?",
+            "options": [
+                "x86",
+                "amd64",
+                "arm",
+                "x86_arm",
+                "x86_amd64",
+                "amd64_x86",
+                "amd64_arm",
+            ],
+            "default": "amd64"
+        },
+        {
+            "id": "vcvars_ver",
+            "type": "pickString",
+            "description": "What vcvars_ver do you want to create?",
+            "options": [
+                "14.2", // 2019
+                "14.1", // 2017
+                "14.0", // 2015
+            ],
+            "default": "14.2"
+        }
+    ]
+}
