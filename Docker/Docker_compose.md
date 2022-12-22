@@ -853,7 +853,7 @@ stderr_logfile=/home/bicycle/etc/supervisor/var/log/vehiclebrand.log
 ```
 $ supervisorctl -c ~/etc/supervisord.conf
 > reread
-> start 
+> update 
 ```
 
 docker 容器顺利启动，访问我们的项目网站。抛掉镜像编排的准备工作，相当于我们只执行了一条构建容器并启动容器的命令就部署了我们的博客应用。如果换台服务器，也只要再执行一下镜像构建和启动容器的命令，服务就又可以起来！这就是 docker 的好处。
