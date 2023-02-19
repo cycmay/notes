@@ -828,7 +828,7 @@ DJANGO_SECRET_KEY=2pe8eih8oah2_2z1=7f84bzme7^bwuto7y&f(#@rgd9ux9mp-3
 回到项目根目录，运行 build 命令构建镜像：
 
 ```bash
-$ docker-compose -f production.yml build
+$ docker-compose -f production.yml up build
 ```
 
 然后我们可以开始启动根据构建好的镜像启动 docker 容器，不过为了方便，我们的 docker 进程仍然由 supervisor 来管理，我们修改一下博客应用的配置，让它启动时启动 docker 容器。
@@ -858,4 +858,9 @@ $ supervisorctl -c ~/etc/supervisord.conf
 
 docker 容器顺利启动，访问我们的项目网站。抛掉镜像编排的准备工作，相当于我们只执行了一条构建容器并启动容器的命令就部署了我们的博客应用。如果换台服务器，也只要再执行一下镜像构建和启动容器的命令，服务就又可以起来！这就是 docker 的好处。
 
+访问docker 容器
+
+```
+docker exec -ti 52c08588ab5e sh
+```
 > 本项目在IDE VS code 软件进行开发，安装插件Docker 即可显示当前docker的镜像和容器。
